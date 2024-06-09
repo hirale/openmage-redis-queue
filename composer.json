@@ -1,0 +1,40 @@
+{
+    "name": "hirale/openmage-redis-queue",
+    "description": "A simple redis queue module for openmage",
+    "type": "magento-module",
+    "license": "OSL-3.0",
+    "keywords": [
+        "magento",
+        "magento1",
+        "openmage",
+        "queue",
+        "redis"
+    ],
+    "require": {
+        "php": "^8.0",
+        "magento-hackathon/magento-composer-installer": "*",
+        "predis/predis": "*"
+    },
+    "authors": [
+        {
+            "name": "Hirale"
+        }
+    ],
+    "config": {
+        "allow-plugins": {
+            "cweagans/composer-patches": true
+        }
+    },
+    "extra": {
+        "map": [
+            [
+                "src/app/etc/modules/Hirale_Queue.xml",
+                "app/etc/modules/Hirale_Queue.xml"
+            ],
+            [
+                "src/app/code/community/Hirale/Queue",
+                "app/code/community/Hirale/Queue"
+            ]
+        ]
+    }
+}

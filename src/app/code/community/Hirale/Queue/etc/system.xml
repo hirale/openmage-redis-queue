@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<config>
+    <sections>
+        <system>
+            <groups>
+                <hirale_queue translate="label">
+                    <label>Hirale Redis Queue Settings</label>
+                    <frontend_type>text</frontend_type>
+                    <sort_order>10</sort_order>
+                    <show_in_default>1</show_in_default>
+                    <show_in_website>0</show_in_website>
+                    <show_in_store>0</show_in_store>
+                    <fields>
+                        <scheme>
+                            <label>Scheme</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>1</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                            <comment>tcp or unix</comment>
+                        </scheme>
+                        <host translate="label">
+                            <label>Host</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>1</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                            <comment>If shceme is unix then host should be absolute path, if scheme
+                                is tcp then host should be hostname</comment>
+                        </host>
+                        <port translate="label">
+                            <label>Port</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>2</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </port>
+                        <database translate="label">
+                            <label>Database</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>3</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </database>
+                        <count translate="label">
+                            <label>Message Count</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>3</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                            <comment>How many messages to fetch at a time</comment>
+                        </count>
+                    </fields>
+                </hirale_queue>
+            </groups>
+        </system>
+    </sections>
+</config>

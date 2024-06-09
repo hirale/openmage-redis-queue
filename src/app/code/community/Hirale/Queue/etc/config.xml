@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<config>
+    <modules>
+        <Hirale_Queue>
+            <version>1.0.0</version>
+        </Hirale_Queue>
+    </modules>
+    <global>
+        <models>
+            <hirale_queue>
+                <class>Hirale_Queue_Model</class>
+            </hirale_queue>
+        </models>
+        <helpers>
+            <hirale_queue>
+                <class>Hirale_Queue_Helper</class>
+            </hirale_queue>
+        </helpers>
+    </global>
+    <crontab>
+        <jobs>
+            <hirale_queue_process>
+                <schedule>
+                    <cron_expr>* * * * *</cron_expr>
+                </schedule>
+                <run>
+                    <model>hirale_queue/task::process</model>
+                </run>
+            </hirale_queue_process>
+        </jobs>
+    </crontab>
+</config>
