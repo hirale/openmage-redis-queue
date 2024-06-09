@@ -8,7 +8,7 @@ A module using Redis Stream to process asynchronous tasks.
 ### Install with [Magento Composer Installer](https://github.com/Cotya/magento-composer-installer)
 
 ```bash
-composer require hirale/openmage-redis-queue:dev-master
+composer require hirale/openmage-redis-queue
 ```
 
 ## Usage
