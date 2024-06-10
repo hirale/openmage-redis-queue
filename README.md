@@ -2,6 +2,12 @@
 
 A module using Redis Stream to process asynchronous tasks.
 
+## Modules that depend on this module
+
+| Module | URL |
+| --- | --- |
+| Google Analytics 4 Measurement Protocol | [openmage-ga4-measurement](https://github.com/hirale/openmage-ga4-measurement) |
+| Meta Conversions API | [openmage-meta-conversions](https://github.com/hirale/openmage-meta-conversions) |
 
 ## Install
 
