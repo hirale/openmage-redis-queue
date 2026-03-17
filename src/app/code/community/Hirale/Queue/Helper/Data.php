@@ -16,23 +16,24 @@ class Hirale_Queue_Helper_Data extends Mage_Core_Helper_Abstract
      *
      * @return Client The Redis client instance.
      */
-
-    public function getRedis()
-    {
-        if (!self::$_redis) {
-            $host = Mage::getStoreConfig('system/hirale_queue/host') ?: 'localhost';
-            $scheme = Mage::getStoreConfig('system/hirale_queue/scheme') ?: 'tcp';
-            $port = Mage::getStoreConfig('system/hirale_queue/port') ?: 6379;
-            $database = Mage::getStoreConfig('system/hirale_queue/database') ?: 0;
-
-            self::$_redis = new Client([
+    public function getRedis() { 
+        if (!self::$_redis) { 
+            $scheme = Mage::getStoreConfig('system/hirale_queue/scheme') ?: 'tcp'; 
+            
+            $params = [
                 'scheme' => $scheme,
-                'host' => $host,
-                'port' => $port,
-                'database' => $database
-            ]);
-        }
+                'database' => Mage::getStoreConfig('system/hirale_queue/database') ?: 0,
+            ];
 
-        return self::$_redis;
+            if ($scheme === 'unix') {
+                $params['path'] = Mage::getStoreConfig('system/hirale_queue/host') ?: '/var/run/redis/redis.sock';
+            } else {
+                $params['host'] = Mage::getStoreConfig('system/hirale_queue/host') ?: 'localhost';
+                $params['port'] = Mage::getStoreConfig('system/hirale_queue/port') ?: 6379;
+            }
+
+            self::$_redis = new Client($params); 
+        } 
+        return self::$_redis; 
     }
 }
