@@ -86,6 +86,15 @@
                             <show_in_store>0</show_in_store>
                             <comment>How many messages to fetch at a time</comment>
                         </count>
+                        <publish_limit translate="label comment">
+                            <label>Publish Limit</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>55</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                            <comment>How many due DB jobs to publish to Redis before each worker read.</comment>
+                        </publish_limit>
                         <stream_key translate="label">
                             <label>Stream Key</label>
                             <frontend_type>text</frontend_type>
@@ -111,6 +120,33 @@
                             <show_in_store>0</show_in_store>
                             <comment>Leave empty to use the stable default hirale_queue_worker. Set a unique name only when running distinct long-lived consumers.</comment>
                         </consumer>
+                        <pending_idle_seconds translate="label comment">
+                            <label>Pending Idle Seconds</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>90</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                            <comment>Pending Redis messages idle for at least this long can be claimed by the current worker.</comment>
+                        </pending_idle_seconds>
+                        <success_retention_days translate="label comment">
+                            <label>Successful Job Retention Days</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>100</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                            <comment>Successful jobs older than this can be purged from the admin UI.</comment>
+                        </success_retention_days>
+                        <failure_retention_days translate="label comment">
+                            <label>Failed Job Retention Days</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>110</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                            <comment>Failed and canceled jobs older than this can be purged from the admin UI.</comment>
+                        </failure_retention_days>
                     </fields>
                 </settings>
             </groups>

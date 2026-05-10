@@ -127,6 +127,9 @@ if (!class_exists('Mage', false)) {
 require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Helper/Data.php';
 require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Helper/Platform.php';
 require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/TaskHandlerInterface.php';
+require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/Job.php';
+require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/JobRepository.php';
+require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/Queue.php';
 require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/ConfigMigrator.php';
 require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/Platform/AdapterInterface.php';
 require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/Platform/Maho.php';
@@ -134,5 +137,6 @@ require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/Platform/O
 require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/Platform/Factory.php';
 require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/Task.php';
 require_once __DIR__ . '/Support/FakeRedis.php';
+require_once __DIR__ . '/Support/FakeJobRepository.php';
 require_once __DIR__ . '/Support/FakeConfigConnection.php';
 require_once __DIR__ . '/Support/QueueFixtures.php';

@@ -6,9 +6,12 @@ namespace HiraleQueue\Tests\Unit;
 
 use HiraleQueue\Tests\Support\CapturingTaskHandler;
 use HiraleQueue\Tests\Support\FailingTaskHandler;
+use HiraleQueue\Tests\Support\FakeJobRepository;
 use HiraleQueue\Tests\Support\FakeRedis;
 use HiraleQueue\Tests\Support\RedisHelper;
 use HiraleQueue\Tests\Support\RedisThrowingHelper;
+use Hirale_Queue_Model_Job;
+use Hirale_Queue_Model_Queue;
 use Hirale_Queue_Model_Task;
 use Mage;
 use PHPUnit\Framework\TestCase;
@@ -19,6 +22,8 @@ use stdClass;
 
 class TaskTest extends TestCase
 {
+    private ?FakeJobRepository $repository = null;
+
     protected function setUp(): void
     {
         Mage::resetTestState();
@@ -37,6 +42,7 @@ class TaskTest extends TestCase
     public function testAddTaskWritesNormalizedPayloadToStream(): void
     {
         $redis = new FakeRedis();
+        $redis->queueResponse('1700000000000-0');
         $task = $this->createTask($redis);
 
         $task->addTask('test/handler', ['sku' => 'ABC'], 2, 30, 90);
@@ -46,10 +52,10 @@ class TaskTest extends TestCase
         $this->assertSame(['XADD', 'test_stream', '*'], array_slice($command, 0, 3));
 
         $payload = $this->commandPayload($command);
-        $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $payload['id']);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $payload['job_id']);
         $this->assertSame('test/handler', $payload['handler']);
         $this->assertSame('{"sku":"ABC"}', $payload['data']);
-        $this->assertSame('2', $payload['retry_count']);
+        $this->assertSame('2', $payload['max_attempts']);
         $this->assertSame('30', $payload['retry_delay']);
         $this->assertSame('90', $payload['timeout']);
     }
@@ -81,14 +87,17 @@ class TaskTest extends TestCase
         $tasks = $this->createTask($redis)->fetchTasks();
 
         $this->assertSame('XGROUP', $redis->commands[0][0]);
-        $this->assertSame('0', $redis->commands[1][count($redis->commands[1]) - 1]);
+        $this->assertSame('XAUTOCLAIM', $redis->commands[1][0]);
         $this->assertSame('>', $redis->commands[2][count($redis->commands[2]) - 1]);
         $this->assertSame([
             [
                 'handler' => 'test/handler',
                 'data' => ['sku' => 'ABC'],
+                'metadata' => [],
                 'retry_count' => '3',
+                'max_attempts' => '3',
                 'stream_id' => '1700000000000-0',
+                'attempt' => '1',
             ],
         ], $tasks);
     }
@@ -116,14 +125,17 @@ class TaskTest extends TestCase
 
         $task = [
             'stream_id' => '1700000000000-0',
+            'job_id' => 'job-success',
             'handler' => 'test/handler',
             'data' => ['sku' => 'ABC'],
-            'retry_count' => '3',
+            'attempt' => '1',
+            'max_attempts' => '3',
         ];
 
         $this->createTask($redis)->processTask($task);
 
         $this->assertSame($task, $handler->lastTask);
+        $this->assertSame(Hirale_Queue_Model_Job::STATUS_SUCCEEDED, $this->repository->jobs['job-success']['status']);
         $this->assertSame(['XACK', 'test_stream', 'test_group', '1700000000000-0'], $redis->commands[0]);
         $this->assertSame(['XDEL', 'test_stream', '1700000000000-0'], $redis->commands[1]);
     }
@@ -135,20 +147,20 @@ class TaskTest extends TestCase
 
         $this->createTask($redis)->processTask([
             'stream_id' => '1700000000000-0',
+            'job_id' => 'job-retry',
             'handler' => 'test/failing',
             'data' => ['sku' => 'ABC'],
-            'retry_count' => '2',
+            'attempt' => '1',
+            'max_attempts' => '2',
             'retry_delay' => '30',
             'timeout' => '90',
         ]);
 
-        $this->assertSame('XADD', $redis->commands[0][0]);
-        $payload = $this->commandPayload($redis->commands[0]);
-        $this->assertSame('test/failing', $payload['handler']);
-        $this->assertSame('1', $payload['retry_count']);
-        $this->assertSame('handler failed', $payload['last_error']);
-        $this->assertSame(['XACK', 'test_stream', 'test_group', '1700000000000-0'], $redis->commands[1]);
-        $this->assertSame(['XDEL', 'test_stream', '1700000000000-0'], $redis->commands[2]);
+        $this->assertSame(Hirale_Queue_Model_Job::STATUS_RETRY_WAIT, $this->repository->jobs['job-retry']['status']);
+        $this->assertSame('handler failed', $this->repository->jobs['job-retry']['last_error']);
+        $this->assertSame(30, $this->repository->jobs['job-retry']['retry_delay']);
+        $this->assertSame(['XACK', 'test_stream', 'test_group', '1700000000000-0'], $redis->commands[0]);
+        $this->assertSame(['XDEL', 'test_stream', '1700000000000-0'], $redis->commands[1]);
     }
 
     public function testProcessTaskDoesNotRequeueAfterRetriesAreExhausted(): void
@@ -158,11 +170,14 @@ class TaskTest extends TestCase
 
         $this->createTask($redis)->processTask([
             'stream_id' => '1700000000000-0',
+            'job_id' => 'job-failed',
             'handler' => 'test/failing',
             'data' => ['sku' => 'ABC'],
-            'retry_count' => '1',
+            'attempt' => '1',
+            'max_attempts' => '1',
         ]);
 
+        $this->assertSame(Hirale_Queue_Model_Job::STATUS_FAILED, $this->repository->jobs['job-failed']['status']);
         $this->assertSame(['XACK', 'test_stream', 'test_group', '1700000000000-0'], $redis->commands[0]);
         $this->assertSame(['XDEL', 'test_stream', '1700000000000-0'], $redis->commands[1]);
         $this->assertStringContainsString('Task exhausted retries', (string) Mage::$logs[1]['message']);
@@ -175,19 +190,26 @@ class TaskTest extends TestCase
 
         $this->createTask($redis)->processTask([
             'stream_id' => '1700000000000-0',
+            'job_id' => 'job-not-handler',
             'handler' => 'test/not_handler',
             'data' => ['sku' => 'ABC'],
-            'retry_count' => '2',
+            'attempt' => '1',
+            'max_attempts' => '2',
         ]);
 
-        $payload = $this->commandPayload($redis->commands[0]);
-        $this->assertSame('test/not_handler', $payload['handler']);
-        $this->assertStringContainsString('must implement', $payload['last_error']);
+        $this->assertSame(Hirale_Queue_Model_Job::STATUS_RETRY_WAIT, $this->repository->jobs['job-not-handler']['status']);
+        $this->assertStringContainsString('must implement', $this->repository->jobs['job-not-handler']['last_error']);
     }
 
     private function createTask(FakeRedis $redis): Hirale_Queue_Model_Task
     {
         $task = new Hirale_Queue_Model_Task();
+        $this->repository = new FakeJobRepository();
+        $queue = (new Hirale_Queue_Model_Queue())
+            ->setRepository($this->repository)
+            ->setRedis($redis);
+        Mage::setModel('hirale_queue/queue', $queue);
+        Mage::setStoreConfig('hirale_queue/settings/stream_key', 'test_stream');
         Mage::setHelper('hirale_queue', new RedisHelper($redis));
         $this->setPrivateProperty($task, '_streamKey', 'test_stream');
         $this->setPrivateProperty($task, '_group', 'test_group');

@@ -34,6 +34,8 @@ class PackageMetadataTest extends TestCase
         $this->assertSame('0', (string) $configXml->default->hirale_queue->settings->enabled);
         $this->assertSame('', (string) $configXml->default->hirale_queue->settings->dsn);
         $this->assertSame('hirale_queue_worker', (string) $configXml->default->hirale_queue->settings->consumer);
+        $this->assertSame('100', (string) $configXml->default->hirale_queue->settings->publish_limit);
+        $this->assertSame('300', (string) $configXml->default->hirale_queue->settings->pending_idle_seconds);
     }
 
     public function testPhpUnitDevDependencySupportsPhp81Runtime(): void
@@ -51,6 +53,44 @@ class PackageMetadataTest extends TestCase
         $this->assertSame('Queue', (string) $systemXml->sections->hirale_queue->label);
         $this->assertSame('hirale', (string) $systemXml->sections->hirale_queue->tab);
         $this->assertTrue(isset($systemXml->sections->hirale_queue->groups->settings));
+        $this->assertTrue(isset($systemXml->sections->hirale_queue->groups->settings->fields->publish_limit));
+    }
+
+    public function testModuleVersionIsMajorTwoForDbBackedQueueLine(): void
+    {
+        $configXml = simplexml_load_file($this->rootPath('src/app/code/community/Hirale/Queue/etc/config.xml'));
+
+        $this->assertSame('2.0.0', (string) $configXml->modules->Hirale_Queue->version);
+    }
+
+    public function testAdminBlocksAreRegisteredForQueuePage(): void
+    {
+        $configXml = simplexml_load_file($this->rootPath('src/app/code/community/Hirale/Queue/etc/config.xml'));
+
+        $this->assertSame('Hirale_Queue_Block', (string) $configXml->global->blocks->hirale_queue->class);
+    }
+
+    public function testAdminMenuExposesQueueOperations(): void
+    {
+        $adminhtmlXml = simplexml_load_file($this->rootPath('src/app/code/community/Hirale/Queue/etc/adminhtml.xml'));
+        $controllerPath = $this->rootPath('src/app/code/community/Hirale/Queue/controllers/Adminhtml/QueueController.php');
+        $legacyControllerPath = $this->rootPath('src/app/code/community/Hirale/Queue/controllers/Adminhtml/Hirale/QueueController.php');
+
+        $this->assertSame(
+            'adminhtml/queue/index',
+            (string) $adminhtmlXml->menu->system->children->tools->children->hirale_queue->action,
+        );
+        $this->assertTrue(isset($adminhtmlXml->acl->resources->admin->children->system->children->tools->children->hirale_queue));
+        $this->assertFileExists($controllerPath);
+        $this->assertStringContainsString(
+            'class Hirale_Queue_Adminhtml_QueueController',
+            (string) file_get_contents($controllerPath),
+        );
+        $this->assertFileExists($legacyControllerPath);
+        $this->assertStringContainsString(
+            'class Hirale_Queue_Adminhtml_Hirale_QueueController extends Hirale_Queue_Adminhtml_QueueController',
+            (string) file_get_contents($legacyControllerPath),
+        );
     }
 
     /**

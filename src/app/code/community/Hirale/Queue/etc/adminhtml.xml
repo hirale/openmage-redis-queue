@@ -1,5 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <config>
+    <menu>
+        <system>
+            <children>
+                <tools>
+                    <children>
+                        <hirale_queue translate="title">
+                            <title>Hirale Queue</title>
+                            <sort_order>120</sort_order>
+                            <action>adminhtml/queue/index</action>
+                        </hirale_queue>
+                    </children>
+                </tools>
+            </children>
+        </system>
+    </menu>
     <acl>
         <resources>
             <admin>
@@ -14,6 +29,14 @@
                                     </hirale_queue>
                                 </children>
                             </config>
+                            <tools>
+                                <children>
+                                    <hirale_queue translate="title">
+                                        <title>Hirale Queue</title>
+                                        <sort_order>120</sort_order>
+                                    </hirale_queue>
+                                </children>
+                            </tools>
                         </children>
                     </system>
                 </children>

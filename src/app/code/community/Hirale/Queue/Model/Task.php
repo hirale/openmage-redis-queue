@@ -13,6 +13,7 @@ class Hirale_Queue_Model_Task
     private ?string $_streamKey = null;
     private ?string $_group = null;
     private ?string $_consumer = null;
+    private ?Hirale_Queue_Model_Queue $_queue = null;
 
     /**
      * Add a task to the Redis stream.
@@ -26,16 +27,11 @@ class Hirale_Queue_Model_Task
     public function addTask(string $handler, $data, int $retryCount = 3, int $retryDelay = 60, int $timeout = 60): void
     {
         try {
-            $task = [
-                'id' => bin2hex(random_bytes(16)),
-                'handler' => $handler,
-                'data' => json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'retry_count' => (string) $retryCount,
-                'retry_delay' => (string) $retryDelay,
-                'timeout' => (string) $timeout,
-            ];
-
-            $this->_xadd($task);
+            $this->_getQueueService()->enqueuePayload($handler, $data, [
+                'max_attempts' => $retryCount,
+                'retry_delay' => $retryDelay,
+                'timeout' => $timeout,
+            ]);
         } catch (Throwable $e) {
             Mage::log($e->getMessage(), Level::Error, 'exception.log');
         }
@@ -52,9 +48,10 @@ class Hirale_Queue_Model_Task
      */
     public function fetchTasks(): ?array
     {
+        $this->_getQueueService()->publishDueJobs($this->_getPublishLimit());
         $this->_ensureGroup();
 
-        $tasks = $this->_readGroup('0', 1);
+        $tasks = $this->_claimPendingTasks();
         if ($tasks === []) {
             $tasks = $this->_readGroup('>', $this->_getCount(), 5000);
         }
@@ -92,8 +89,9 @@ class Hirale_Queue_Model_Task
     /**
      * Execute a single stream message and acknowledge it on success.
      *
-     * Failed tasks are handled by _handleFailure(), which either requeues the
-     * task with one fewer retry or acknowledges the exhausted message.
+     * Failed tasks are handled by _handleFailure(), which either schedules a
+     * DB-backed retry or marks the job failed before acknowledging the stream
+     * message.
      *
      * @param array<string, mixed> $task
      */
@@ -112,7 +110,9 @@ class Hirale_Queue_Model_Task
                 ));
             }
 
+            $jobId = $this->_getQueueService()->markRunning($task);
             $handler->handle($task);
+            $this->_getQueueService()->markSucceeded($jobId);
             $this->_ackTask((string) $task['stream_id']);
         } catch (Throwable $e) {
             $this->_handleFailure($task, $e);
@@ -120,10 +120,7 @@ class Hirale_Queue_Model_Task
     }
 
     /**
-     * Requeue failed work until retry_count is exhausted.
-     *
-     * Redis Streams do not provide delayed retries here; retry_delay is retained
-     * in the payload for compatibility with existing callers and future workers.
+     * Schedule failed work for later publishing until max attempts are exhausted.
      *
      * @param array<string, mixed> $task
      */
@@ -135,14 +132,17 @@ class Hirale_Queue_Model_Task
             'exception.log',
         );
 
-        $retryCount = max(0, (int) ($task['retry_count'] ?? 0) - 1);
-        if ($retryCount > 0) {
-            $retryTask = $task;
-            unset($retryTask['stream_id']);
-            $retryTask['retry_count'] = (string) $retryCount;
-            $retryTask['last_error'] = $e->getMessage();
-            $this->_xadd($retryTask);
+        $jobId = $this->_getQueueService()->ensureJobForTask($task);
+        $attempt = max(1, (int) ($task['attempt'] ?? 1));
+        $maxAttempts = max(1, (int) ($task['max_attempts'] ?? $task['retry_count'] ?? 1));
+        if ($attempt < $maxAttempts) {
+            $this->_getQueueService()->scheduleRetry(
+                $jobId,
+                $e->getMessage(),
+                max(0, (int) ($task['retry_delay'] ?? Hirale_Queue_Model_Job::DEFAULT_RETRY_DELAY)),
+            );
         } else {
+            $this->_getQueueService()->markFailed($jobId, $e->getMessage());
             Mage::log(
                 sprintf('Task exhausted retries: %s', print_r($task, true)),
                 Level::Error,
@@ -151,24 +151,6 @@ class Hirale_Queue_Model_Task
         }
 
         $this->_ackTask((string) $task['stream_id']);
-    }
-
-    /**
-     * Append one normalized task payload to the configured Redis stream.
-     *
-     * @param array<string, mixed> $task
-     */
-    private function _xadd(array $task): void
-    {
-        $command = ['XADD', $this->_getStreamKey(), '*'];
-        foreach ($task as $field => $value) {
-            $command[] = (string) $field;
-            $command[] = is_scalar($value) || $value === null
-                ? (string) $value
-                : json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        }
-
-        $this->_getRedis()->executeRaw($command);
     }
 
     /**
@@ -212,12 +194,78 @@ class Hirale_Queue_Model_Task
 
                 $payload = $this->_payloadToAssoc($message[1]);
                 $payload['stream_id'] = (string) $message[0];
-                $payload['data'] = $this->_decodePayloadData($payload['data'] ?? null);
-                $tasks[] = $payload;
+                $tasks[] = $this->_normalizeTaskPayload($payload);
             }
         }
 
         return $tasks;
+    }
+
+    /**
+     * Recover stale pending messages before reading new work.
+     *
+     * Redis 6.2+ supports XAUTOCLAIM. Older Redis servers fall back to reading
+     * this consumer's pending messages with XREADGROUP 0, preserving 1.x
+     * behavior on Redis 5.x.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function _claimPendingTasks(): array
+    {
+        try {
+            $results = $this->_getRedis()->executeRaw([
+                'XAUTOCLAIM',
+                $this->_getStreamKey(),
+                $this->_getGroup(),
+                $this->_getConsumer(),
+                (string) ($this->_getPendingIdleSeconds() * 1000),
+                '0-0',
+                'COUNT',
+                (string) $this->_getCount(),
+            ]);
+
+            if (empty($results) || !is_array($results) || empty($results[1]) || !is_array($results[1])) {
+                return [];
+            }
+
+            $tasks = [];
+            foreach ($results[1] as $message) {
+                if (!is_array($message) || empty($message[0]) || empty($message[1])) {
+                    continue;
+                }
+
+                $payload = $this->_payloadToAssoc($message[1]);
+                $payload['stream_id'] = (string) $message[0];
+                $tasks[] = $this->_normalizeTaskPayload($payload);
+            }
+
+            return $tasks;
+        } catch (ServerException $e) {
+            $message = strtolower($e->getMessage());
+            if (!str_contains($message, 'unknown') && !str_contains($message, 'syntax')) {
+                throw $e;
+            }
+        }
+
+        return $this->_readGroup('0', 1);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function _normalizeTaskPayload(array $payload): array
+    {
+        $payload['data'] = $this->_decodePayloadData($payload['data'] ?? null);
+        $payload['metadata'] = $this->_decodePayloadData($payload['metadata'] ?? null);
+        if (!isset($payload['max_attempts']) && isset($payload['retry_count'])) {
+            $payload['max_attempts'] = $payload['retry_count'];
+        }
+        if (!isset($payload['attempt'])) {
+            $payload['attempt'] = '1';
+        }
+
+        return $payload;
     }
 
     private function _ackTask(string $streamId): void
@@ -292,6 +340,16 @@ class Hirale_Queue_Model_Task
         return $this->_count;
     }
 
+    private function _getPublishLimit(): int
+    {
+        return max(1, (int) ($this->_getQueueHelper()->getConfigValue('publish_limit', 100) ?: 100));
+    }
+
+    private function _getPendingIdleSeconds(): int
+    {
+        return max(1, (int) ($this->_getQueueHelper()->getConfigValue('pending_idle_seconds', 300) ?: 300));
+    }
+
     private function _getStreamKey(): string
     {
         if ($this->_streamKey === null) {
@@ -350,5 +408,18 @@ class Hirale_Queue_Model_Task
         }
 
         return $helper;
+    }
+
+    private function _getQueueService(): Hirale_Queue_Model_Queue
+    {
+        if ($this->_queue === null) {
+            $queue = Mage::getModel('hirale_queue/queue');
+            if (!$queue instanceof Hirale_Queue_Model_Queue) {
+                $queue = new Hirale_Queue_Model_Queue();
+            }
+            $this->_queue = $queue;
+        }
+
+        return $this->_queue;
     }
 }

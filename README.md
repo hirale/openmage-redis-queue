@@ -1,6 +1,8 @@
 # Hirale Redis Queue Module
 
-A community-scope module using Redis Streams to process asynchronous tasks in OpenMage and Maho.
+A community-scope queue module for OpenMage and Maho. Version 2.x uses Redis
+Streams for worker delivery and a database-backed job index for observability,
+manual recovery, and audit history.
 
 ## Modules that depend on this module
 
@@ -15,7 +17,7 @@ A community-scope module using Redis Streams to process asynchronous tasks in Op
 
 | Module line | Platform support | Logger API |
 | --- | --- | --- |
-| Current / next major | Maho 25.9+ or OpenMage 20.17+ | Monolog-backed `Mage::log()` |
+| 2.x | Maho 25.9+ or OpenMage 20.17+ | Monolog-backed `Mage::log()` |
 | Legacy 1.x | Older Maho/OpenMage/Magento 1 installations | Zend_Log-backed `Mage::log()` |
 
 The current module line declares Composer conflicts for `mahocommerce/maho <25.9`
@@ -40,6 +42,12 @@ From version 1.1.0, admin configuration moved from
 values from `system/hirale_queue/*` to `hirale_queue/settings/*` without
 overwriting values already saved at the new paths.
 
+Version 2.0.0 adds the `hirale_queue_job` table. Redis remains the execution
+queue, while the database stores job status, retry scheduling, last errors, and
+admin history. Existing Redis stream messages are not deleted during upgrade;
+when a 2.x worker consumes a legacy message it creates a matching DB job record
+before running the handler.
+
 ## Development
 
 Install dev dependencies and run the package test suite:
@@ -59,6 +67,51 @@ running Maho/OpenMage application or Redis server.
 Go to system config `System > Configuration > Hirale > Queue`.
 
 ![System > Configuration > System > Hirale Redis Queue Settings](image.png)
+
+The queue worker is disabled by default. Configure Redis, use **Test Redis
+Connection** from `System > Tools > Hirale Queue`, then enable the worker and
+make sure cron is running.
+
+### Admin operations
+
+Go to `System > Tools > Hirale Queue` to inspect queue health and job state.
+The admin UI shows status counts and a job grid with handler, queue, attempts,
+timestamps, and last error. Operators can retry a failed job, cancel a job,
+purge finished jobs according to retention settings, or test the Redis
+connection without using Redis CLI access.
+
+### Producer API
+
+Use the queue service from dependent modules:
+
+```php
+Mage::getModel('hirale_queue/queue')->enqueue(
+    'hirale_queue_example/testHandler',
+    ['sku' => 'ABC'],
+    [
+        'queue' => 'default',
+        'max_attempts' => 3,
+        'retry_delay' => 60,
+        'delay' => 0,
+        'metadata' => ['source' => 'example'],
+    ],
+);
+```
+
+The legacy 1.x API remains supported and delegates to the 2.x service:
+
+```php
+Mage::getModel('hirale_queue/task')->addTask(
+    'hirale_queue_example/testHandler',
+    ['sku' => 'ABC'],
+    3,
+    60,
+    60,
+);
+```
+
+Handlers still implement `Hirale_Queue_Model_TaskHandlerInterface`. Delivery is
+at least once, so handlers must be idempotent.
 
 ### Quick start example
 
@@ -136,7 +189,7 @@ Go to system config `System > Configuration > Hirale > Queue`.
             }
         }
     ```
-5. Enable queue processing in system config, clean cache, and check example.log. Make sure cron is running.
+5. Enable queue processing in system config, clean cache, and check example.log. Make sure cron is running. Failed jobs can be inspected or retried from `System > Tools > Hirale Queue`.
    ``` log
    2024-06-09T14:39:01+00:00 INFO (6): 1717943907550-0: Array
     (
