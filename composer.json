@@ -1,30 +1,40 @@
 {
     "name": "hirale/openmage-redis-queue",
-    "description": "A simple redis queue module for openmage",
+    "description": "A Redis Streams queue module for OpenMage and Maho",
     "type": "magento-module",
     "license": "OSL-3.0",
     "keywords": [
         "magento",
         "magento1",
+        "maho",
+        "mahoecommerce",
         "openmage",
         "queue",
         "redis"
     ],
     "require": {
-        "php": "^8.0",
-        "magento-hackathon/magento-composer-installer": "*",
-        "predis/predis": "*"
+        "magento-hackathon/magento-composer-installer": "^3.0 || ^4.0 || ^99.99",
+        "php": ">=8.1 <8.6",
+        "monolog/monolog": "^3.9",
+        "predis/predis": "^3.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "config": {
+        "allow-plugins": {
+            "magento-hackathon/magento-composer-installer": false
+        }
+    },
+    "conflict": {
+        "mahocommerce/maho": "<25.9",
+        "openmage/magento-lts": "<20.17"
     },
     "authors": [
         {
             "name": "Hirale"
         }
     ],
-    "config": {
-        "allow-plugins": {
-            "cweagans/composer-patches": true
-        }
-    },
     "extra": {
         "map": [
             [
@@ -36,5 +46,13 @@
                 "app/code/community/Hirale/Queue"
             ]
         ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "HiraleQueue\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
     }
 }

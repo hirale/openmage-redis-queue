@@ -8,8 +8,9 @@
                         <children>
                             <config>
                                 <children>
-                                    <hirale_queue>
-                                        <title>Hirale Redis Queue Settings</title>
+                                    <hirale_queue translate="title">
+                                        <title>Queue</title>
+                                        <sort_order>120</sort_order>
                                     </hirale_queue>
                                 </children>
                             </config>

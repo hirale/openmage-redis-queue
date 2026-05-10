@@ -1,180 +1,354 @@
 <?php
+
+declare(strict_types=1);
+
+use Monolog\Level;
+use Predis\Client;
 use Predis\Response\ServerException;
 
 class Hirale_Queue_Model_Task
 {
-    protected $_redis;
-    protected $_count;
-    protected $_streamKey = 'hirale_queue_stream';
-
-    public function __construct()
-    {
-        $this->_redis = Mage::helper('hirale_queue')->getRedis();
-    }
+    private ?Client $_redis = null;
+    private ?int $_count = null;
+    private ?string $_streamKey = null;
+    private ?string $_group = null;
+    private ?string $_consumer = null;
 
     /**
-     * Adds a task to the queue.
+     * Add a task to the Redis stream.
      *
-     * @param string $handler The handler for the task.
-     * @param mixed $data The data for the task.
-     * @param int $retryCount The number of times to retry the task if it fails. Default is 3.
-     * @param int $retryDelay The delay in seconds between task retries. Default is 60.
-     * @param int $timeout The timeout in seconds for the task. Default is 60.
-     * @throws ServerException If there is an error adding the task to the queue.
-     * @return void
+     * $handler must be a Mage model alias whose model implements
+     * Hirale_Queue_Model_TaskHandlerInterface. Storing aliases instead of class
+     * names keeps local rewrites and community/local overrides available.
+     *
+     * @param mixed $data
      */
-    public function addTask($handler, $data, $retryCount = 3, $retryDelay = 60, $timeout = 60)
+    public function addTask(string $handler, $data, int $retryCount = 3, int $retryDelay = 60, int $timeout = 60): void
     {
         try {
-            $taskId = uniqid();
             $task = [
-                'id' => $taskId,
+                'id' => bin2hex(random_bytes(16)),
                 'handler' => $handler,
-                'data' => json_encode($data),
-                'retry_count' => $retryCount,
-                'retry_delay' => $retryDelay,
-                'timeout' => $timeout,
+                'data' => json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'retry_count' => (string) $retryCount,
+                'retry_delay' => (string) $retryDelay,
+                'timeout' => (string) $timeout,
             ];
-            $this->_redis->xadd($this->_streamKey, $task);
-        } catch (ServerException $e) {
-            Mage::log($e->getMessage(), Zend_Log::ERR, 'exception.log');
-        }
 
+            $this->_xadd($task);
+        } catch (Throwable $e) {
+            Mage::log($e->getMessage(), Level::Error, 'exception.log');
+        }
     }
 
     /**
-     * Fetches tasks from the Redis stream.
+     * Fetch pending work for this consumer.
      *
-     * This function retrieves tasks from the Redis stream specified by the `$_streamKey` property.
-     * It uses the `XREAD` command to fetch a maximum of 10 messages from the stream, with a block
-     * timeout of 5000 milliseconds. The function then iterates over the fetched messages and
-     * extracts the necessary information (message ID, handler, data, retry count, retry delay,
-     * and timeout) to construct an array of tasks.
+     * The consumer first claims one pending message for retry/recovery, then
+     * blocks briefly for new stream messages. A null return means there is no
+     * work available for this cron tick.
      *
-     * @return array|null  Returns an array of tasks, where each task is represented as an associative
-     *              array containing the keys 'id', 'handler', 'data', 'retry_count', 'retry_delay',
-     *              and 'timeout'.
+     * @return array<int, array<string, mixed>>|null
      */
-    public function fetchTasks()
+    public function fetchTasks(): ?array
     {
-        if (!$this->_count) {
-            $this->_count = Mage::getStoreConfig('system/hirale_queue/count') ?: 10;
-        }
-        $tasks = [];
-        $results = $this->_redis->executeRaw([
-            'XREAD',
-            'COUNT',
-            $this->_count,
-            'BLOCK',
-            '5000',
-            'STREAMS',
-            $this->_streamKey,
-            '0'
-        ]);
+        $this->_ensureGroup();
 
-        if (empty($results)) {
-            return null;
+        $tasks = $this->_readGroup('0', 1);
+        if ($tasks === []) {
+            $tasks = $this->_readGroup('>', $this->_getCount(), 5000);
         }
-        foreach ($results as $streamData) {
-            $messages = $streamData[1];
-            foreach ($messages as $message) {
-                $payload = $message[1];
-                $tasks[] = [
-                    'id' => $message[0],
-                    'handler' => $payload[3],
-                    'data' => json_decode($payload[5], true),
-                    'retry_count' => $payload[7],
-                    'retry_delay' => $payload[9],
-                    'timeout' => $payload[11],
-                ];
-            }
-        }
-        return $tasks;
+
+        return $tasks === [] ? null : $tasks;
     }
 
     /**
-     * Processes the tasks by fetching them from the Redis stream and processing each task.
+     * Cron entry point for processing queued tasks.
      *
-     * This function fetches tasks from the Redis stream specified by the `$_streamKey` property.
-     * It uses the `XREAD` command to fetch a maximum of 10 messages from the stream, with a block
-     * timeout of 5000 milliseconds. The function then iterates over the fetched messages and
-     * extracts the necessary information (message ID, handler, data, retry count, retry delay,
-     * and timeout) to construct an array of tasks.
-     *
-     * If no tasks are found, the function returns early. Otherwise, it processes each task by
-     * calling the `processTask` method with the task as an argument.
-     *
-     * If an exception occurs during the processing of tasks, it is logged using the `Mage::logException`
-     * method.
-     *
-     * @throws Exception If an exception occurs during the processing of tasks.
-     * @return void
+     * The admin config flag gates Redis access so installations can ship the
+     * module disabled and enable workers only after Redis is configured.
      */
-    public function process()
+    public function process(): void
     {
+        $helper = Mage::helper('hirale_queue');
+        if (!$helper instanceof Hirale_Queue_Helper_Data || !$helper->getConfigFlag('enabled')) {
+            return;
+        }
+
         try {
             $tasks = $this->fetchTasks();
             if (empty($tasks)) {
                 return;
             }
+
             foreach ($tasks as $task) {
                 $this->processTask($task);
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Mage::logException($e);
         }
     }
 
     /**
-     * Process a task.
+     * Execute a single stream message and acknowledge it on success.
      *
-     * This function processes a task. It first checks if the task is empty and returns if it is.
-     * It then creates a lock key based on the task ID and checks if the lock is set. If the lock
-     * is already set, the function returns.
+     * Failed tasks are handled by _handleFailure(), which either requeues the
+     * task with one fewer retry or acknowledges the exhausted message.
      *
-     * The function sets the expiration time of the lock and dispatches an event to register
-     * handlers. It then gets the handler for the task and calls its handle method.
-     *
-     * If an exception occurs during the processing of the task, the function logs the error
-     * and decrements the retry count. If the retry count is greater than 0, the function adds
-     * the task back to the stream and sleeps for the specified retry delay.
-     *
-     * @param array $task The task to be processed.
-     * @throws \Exception If an error occurs during the processing of the task.
-     * @return void
+     * @param array<string, mixed> $task
      */
-    public function processTask($task)
+    public function processTask(array $task): void
     {
-        if (empty($task)) {
+        if (empty($task['stream_id']) || empty($task['handler'])) {
             return;
         }
-        $lockKey = "hirale_queue_lock:" . $task['id'];
-        $retryCount = $task['retry_count'];
-
-        if (!$this->_redis->setnx($lockKey, 1)) {
-            return;
-        }
-
-        $this->_redis->expire($lockKey, $task['timeout'] + 10);
 
         try {
-            $handler = new $task['handler']();
-            $handler->handle($task);
-            $this->_redis->del($lockKey);
-            $this->_redis->executeRaw(['XACK', $this->_streamKey, $task['id']]);
-            $this->_redis->xdel($this->_streamKey, $task['id']);
-        } catch (\Exception $e) {
-            Mage::log('Failed to process task: ' . $task['handler'] . ', Error: ' . $e->getMessage(), Zend_Log::ERR, 'exception.log');
-            $retryCount--;
-
-            if ($retryCount > 0) {
-                $task['retry_count'] = $retryCount;
-                $this->_redis->xadd($this->_streamKey, $task);
-                sleep($task['retry_delay']);
-            } else {
-                Mage::log('Failed to process task: ' . print_r($task, true) . ', Error: ' . $e->getMessage(), Zend_Log::ERR, 'exception.log');
+            $handler = Mage::getModel((string) $task['handler']);
+            if (!$handler instanceof Hirale_Queue_Model_TaskHandlerInterface) {
+                throw new RuntimeException(sprintf(
+                    'Queue handler "%s" must implement Hirale_Queue_Model_TaskHandlerInterface.',
+                    (string) $task['handler'],
+                ));
             }
-            $this->_redis->del($lockKey);
+
+            $handler->handle($task);
+            $this->_ackTask((string) $task['stream_id']);
+        } catch (Throwable $e) {
+            $this->_handleFailure($task, $e);
         }
+    }
+
+    /**
+     * Requeue failed work until retry_count is exhausted.
+     *
+     * Redis Streams do not provide delayed retries here; retry_delay is retained
+     * in the payload for compatibility with existing callers and future workers.
+     *
+     * @param array<string, mixed> $task
+     */
+    private function _handleFailure(array $task, Throwable $e): void
+    {
+        Mage::log(
+            sprintf('Failed to process task %s: %s', (string) ($task['handler'] ?? ''), $e->getMessage()),
+            Level::Error,
+            'exception.log',
+        );
+
+        $retryCount = max(0, (int) ($task['retry_count'] ?? 0) - 1);
+        if ($retryCount > 0) {
+            $retryTask = $task;
+            unset($retryTask['stream_id']);
+            $retryTask['retry_count'] = (string) $retryCount;
+            $retryTask['last_error'] = $e->getMessage();
+            $this->_xadd($retryTask);
+        } else {
+            Mage::log(
+                sprintf('Task exhausted retries: %s', print_r($task, true)),
+                Level::Error,
+                'exception.log',
+            );
+        }
+
+        $this->_ackTask((string) $task['stream_id']);
+    }
+
+    /**
+     * Append one normalized task payload to the configured Redis stream.
+     *
+     * @param array<string, mixed> $task
+     */
+    private function _xadd(array $task): void
+    {
+        $command = ['XADD', $this->_getStreamKey(), '*'];
+        foreach ($task as $field => $value) {
+            $command[] = (string) $field;
+            $command[] = is_scalar($value) || $value === null
+                ? (string) $value
+                : json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+
+        $this->_getRedis()->executeRaw($command);
+    }
+
+    /**
+     * Read messages from the consumer group and normalize Redis' nested stream
+     * response into associative task arrays.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function _readGroup(string $id, int $count, int $block = 0): array
+    {
+        $command = [
+            'XREADGROUP',
+            'GROUP',
+            $this->_getGroup(),
+            $this->_getConsumer(),
+            'COUNT',
+            (string) $count,
+        ];
+
+        if ($block > 0) {
+            $command[] = 'BLOCK';
+            $command[] = (string) $block;
+        }
+
+        array_push($command, 'STREAMS', $this->_getStreamKey(), $id);
+        $results = $this->_getRedis()->executeRaw($command);
+        if (empty($results) || !is_array($results)) {
+            return [];
+        }
+
+        $tasks = [];
+        foreach ($results as $streamData) {
+            if (!is_array($streamData) || empty($streamData[1]) || !is_array($streamData[1])) {
+                continue;
+            }
+
+            foreach ($streamData[1] as $message) {
+                if (!is_array($message) || empty($message[0]) || empty($message[1])) {
+                    continue;
+                }
+
+                $payload = $this->_payloadToAssoc($message[1]);
+                $payload['stream_id'] = (string) $message[0];
+                $payload['data'] = $this->_decodePayloadData($payload['data'] ?? null);
+                $tasks[] = $payload;
+            }
+        }
+
+        return $tasks;
+    }
+
+    private function _ackTask(string $streamId): void
+    {
+        $this->_getRedis()->executeRaw(['XACK', $this->_getStreamKey(), $this->_getGroup(), $streamId]);
+        $this->_getRedis()->executeRaw(['XDEL', $this->_getStreamKey(), $streamId]);
+    }
+
+    /**
+     * Create the consumer group once, ignoring Redis' BUSYGROUP response when
+     * another worker has already created it.
+     */
+    private function _ensureGroup(): void
+    {
+        try {
+            $this->_getRedis()->executeRaw(['XGROUP', 'CREATE', $this->_getStreamKey(), $this->_getGroup(), '0', 'MKSTREAM']);
+        } catch (ServerException $e) {
+            if (!str_contains($e->getMessage(), 'BUSYGROUP')) {
+                throw $e;
+            }
+        }
+    }
+
+    /**
+     * Convert Redis' alternating field/value payload into an associative array.
+     *
+     * @param mixed $payload
+     * @return array<string, mixed>
+     */
+    private function _payloadToAssoc($payload): array
+    {
+        if (!is_array($payload)) {
+            return [];
+        }
+
+        $keys = array_keys($payload);
+        if ($keys !== range(0, count($payload) - 1)) {
+            return $payload;
+        }
+
+        $data = [];
+        for ($i = 0, $count = count($payload); $i < $count; $i += 2) {
+            if (!isset($payload[$i])) {
+                continue;
+            }
+            $data[(string) $payload[$i]] = $payload[$i + 1] ?? null;
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param mixed $value
+     * @return mixed
+     */
+    private function _decodePayloadData($value)
+    {
+        if (!is_string($value) || $value === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        return json_last_error() === JSON_ERROR_NONE ? $decoded : [];
+    }
+
+    private function _getCount(): int
+    {
+        if ($this->_count === null) {
+            $this->_count = max(1, (int) ($this->_getQueueHelper()->getConfigValue('count', 10) ?: 10));
+        }
+
+        return $this->_count;
+    }
+
+    private function _getStreamKey(): string
+    {
+        if ($this->_streamKey === null) {
+            $this->_streamKey = trim((string) $this->_getQueueHelper()->getConfigValue('stream_key', 'hirale_queue_stream'));
+            if ($this->_streamKey === '') {
+                $this->_streamKey = 'hirale_queue_stream';
+            }
+        }
+
+        return $this->_streamKey;
+    }
+
+    private function _getGroup(): string
+    {
+        if ($this->_group === null) {
+            $this->_group = trim((string) $this->_getQueueHelper()->getConfigValue('group', 'hirale_queue'));
+            if ($this->_group === '') {
+                $this->_group = 'hirale_queue';
+            }
+        }
+
+        return $this->_group;
+    }
+
+    private function _getConsumer(): string
+    {
+        if ($this->_consumer === null) {
+            $this->_consumer = trim((string) $this->_getQueueHelper()->getConfigValue('consumer', 'hirale_queue_worker'));
+            if ($this->_consumer === '') {
+                $this->_consumer = 'hirale_queue_worker';
+            }
+        }
+
+        return $this->_consumer;
+    }
+
+    private function _getRedis(): Client
+    {
+        if ($this->_redis === null) {
+            $redis = $this->_getQueueHelper()->getRedis();
+            if (!$redis instanceof Client) {
+                throw new RuntimeException('Hirale Queue Redis client is unavailable.');
+            }
+
+            $this->_redis = $redis;
+        }
+
+        return $this->_redis;
+    }
+
+    private function _getQueueHelper(): Hirale_Queue_Helper_Data
+    {
+        $helper = Mage::helper('hirale_queue');
+        if (!$helper instanceof Hirale_Queue_Helper_Data) {
+            throw new RuntimeException('Hirale Queue helper is unavailable.');
+        }
+
+        return $helper;
     }
 }

@@ -1,20 +1,51 @@
 <?xml version="1.0"?>
 <config>
+    <tabs>
+        <hirale translate="label">
+            <label>Hirale</label>
+            <sort_order>300</sort_order>
+        </hirale>
+    </tabs>
     <sections>
-        <system>
+        <hirale_queue translate="label">
+            <label>Queue</label>
+            <tab>hirale</tab>
+            <sort_order>120</sort_order>
+            <show_in_default>1</show_in_default>
+            <show_in_website>0</show_in_website>
+            <show_in_store>0</show_in_store>
             <groups>
-                <hirale_queue translate="label">
-                    <label>Hirale Redis Queue Settings</label>
+                <settings translate="label">
+                    <label>Redis Queue Settings</label>
                     <frontend_type>text</frontend_type>
                     <sort_order>10</sort_order>
                     <show_in_default>1</show_in_default>
                     <show_in_website>0</show_in_website>
                     <show_in_store>0</show_in_store>
                     <fields>
+                        <enabled translate="label comment">
+                            <label>Enable Queue Worker</label>
+                            <frontend_type>select</frontend_type>
+                            <source_model>adminhtml/system_config_source_yesno</source_model>
+                            <sort_order>1</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                            <comment>When disabled, the cron consumer exits without connecting to Redis.</comment>
+                        </enabled>
+                        <dsn translate="label comment">
+                            <label>Redis DSN</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>2</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                            <comment>Example: redis://127.0.0.1:6379/5. Leave empty to compose the connection from scheme/host/port/database. When set, this takes precedence over those fields.</comment>
+                        </dsn>
                         <scheme>
                             <label>Scheme</label>
                             <frontend_type>text</frontend_type>
-                            <sort_order>1</sort_order>
+                            <sort_order>10</sort_order>
                             <show_in_default>1</show_in_default>
                             <show_in_website>0</show_in_website>
                             <show_in_store>0</show_in_store>
@@ -23,17 +54,17 @@
                         <host translate="label">
                             <label>Host</label>
                             <frontend_type>text</frontend_type>
-                            <sort_order>1</sort_order>
+                            <sort_order>20</sort_order>
                             <show_in_default>1</show_in_default>
                             <show_in_website>0</show_in_website>
                             <show_in_store>0</show_in_store>
-                            <comment>If shceme is unix then host should be absolute path, if scheme
+                            <comment>If scheme is unix then host should be absolute path, if scheme
                                 is tcp then host should be hostname</comment>
                         </host>
                         <port translate="label">
                             <label>Port</label>
                             <frontend_type>text</frontend_type>
-                            <sort_order>2</sort_order>
+                            <sort_order>30</sort_order>
                             <show_in_default>1</show_in_default>
                             <show_in_website>0</show_in_website>
                             <show_in_store>0</show_in_store>
@@ -41,7 +72,7 @@
                         <database translate="label">
                             <label>Database</label>
                             <frontend_type>text</frontend_type>
-                            <sort_order>3</sort_order>
+                            <sort_order>40</sort_order>
                             <show_in_default>1</show_in_default>
                             <show_in_website>0</show_in_website>
                             <show_in_store>0</show_in_store>
@@ -49,15 +80,40 @@
                         <count translate="label">
                             <label>Message Count</label>
                             <frontend_type>text</frontend_type>
-                            <sort_order>3</sort_order>
+                            <sort_order>50</sort_order>
                             <show_in_default>1</show_in_default>
                             <show_in_website>0</show_in_website>
                             <show_in_store>0</show_in_store>
                             <comment>How many messages to fetch at a time</comment>
                         </count>
+                        <stream_key translate="label">
+                            <label>Stream Key</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>60</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </stream_key>
+                        <group translate="label">
+                            <label>Consumer Group</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>70</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </group>
+                        <consumer translate="label comment">
+                            <label>Consumer Name</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>80</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                            <comment>Leave empty to use the stable default hirale_queue_worker. Set a unique name only when running distinct long-lived consumers.</comment>
+                        </consumer>
                     </fields>
-                </hirale_queue>
+                </settings>
             </groups>
-        </system>
+        </hirale_queue>
     </sections>
 </config>

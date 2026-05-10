@@ -2,7 +2,7 @@
 <config>
     <modules>
         <Hirale_Queue>
-            <version>1.0.0</version>
+            <version>1.1.0</version>
         </Hirale_Queue>
     </modules>
     <global>
@@ -16,6 +16,13 @@
                 <class>Hirale_Queue_Helper</class>
             </hirale_queue>
         </helpers>
+        <resources>
+            <hirale_queue_setup>
+                <setup>
+                    <module>Hirale_Queue</module>
+                </setup>
+            </hirale_queue_setup>
+        </resources>
     </global>
     <crontab>
         <jobs>
@@ -29,4 +36,16 @@
             </hirale_queue_process>
         </jobs>
     </crontab>
+    <default>
+        <hirale_queue>
+            <settings>
+                <enabled>0</enabled>
+                <dsn></dsn>
+                <stream_key>hirale_queue_stream</stream_key>
+                <group>hirale_queue</group>
+                <consumer>hirale_queue_worker</consumer>
+                <count>10</count>
+            </settings>
+        </hirale_queue>
+    </default>
 </config>
