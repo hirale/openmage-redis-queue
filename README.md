@@ -221,8 +221,8 @@ Mage::getModel('hirale_queue/task')->addTask(
 );
 ```
 
-Handlers still implement `Hirale_Queue_Model_TaskHandlerInterface`. Delivery is
-at least once, so handlers must be idempotent.
+Handlers still implement `Hirale_Queue_Model_TaskHandlerInterface` and expose
+`handle($data)`. Delivery is at least once, so handlers must be idempotent.
 
 ### Quick start example
 
@@ -279,7 +279,7 @@ at least once, so handlers must be idempotent.
 
         class Hirale_QueueExample_Model_TestHandler implements Hirale_Queue_Model_TaskHandlerInterface
         {
-            public function handle(array $data): void
+            public function handle($data)
             {
                 Mage::log($data['id'] . ': ' . print_r($data, true), Level::Info, 'example.log');
             }

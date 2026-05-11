@@ -76,16 +76,67 @@ class FakeJobRepository extends Hirale_Queue_Model_JobRepository
         return array_slice($jobs, 0, $limit);
     }
 
-    public function markPublished(string $jobId, string $streamId, int $attempt): void
+    public function claimForPublish(array $job): bool
     {
+        $jobId = (string) ($job['job_id'] ?? '');
+        if (!isset($this->jobs[$jobId]) || !in_array($this->jobs[$jobId]['status'], [Hirale_Queue_Model_Job::STATUS_QUEUED, Hirale_Queue_Model_Job::STATUS_RETRY_WAIT], true)) {
+            return false;
+        }
+
+        $this->jobs[$jobId]['status'] = Hirale_Queue_Model_Job::STATUS_PUBLISHING;
+
+        return true;
+    }
+
+    public function releasePublishClaim(string $jobId, string $status): void
+    {
+        if (isset($this->jobs[$jobId]) && $this->jobs[$jobId]['status'] === Hirale_Queue_Model_Job::STATUS_PUBLISHING) {
+            $this->jobs[$jobId]['status'] = $status;
+        }
+    }
+
+    public function releaseStalePublishClaims(int $olderThanSeconds): int
+    {
+        $released = 0;
+        foreach ($this->jobs as $jobId => $job) {
+            if ($job['status'] === Hirale_Queue_Model_Job::STATUS_PUBLISHING) {
+                $this->jobs[$jobId]['status'] = Hirale_Queue_Model_Job::STATUS_QUEUED;
+                $this->jobs[$jobId]['stream_id'] = null;
+                $released++;
+            }
+        }
+
+        return $released;
+    }
+
+    public function markPublished(string $jobId, string $streamId, int $attempt): bool
+    {
+        if (!isset($this->jobs[$jobId]) || $this->jobs[$jobId]['status'] !== Hirale_Queue_Model_Job::STATUS_PUBLISHING) {
+            return false;
+        }
+
         $this->jobs[$jobId]['status'] = Hirale_Queue_Model_Job::STATUS_PUBLISHED;
         $this->jobs[$jobId]['stream_id'] = $streamId;
         $this->jobs[$jobId]['attempt'] = $attempt;
+
+        return true;
     }
 
-    public function markRunning(string $jobId): void
+    public function markRunning(string $jobId, ?string $streamId = null): bool
     {
+        if (!isset($this->jobs[$jobId]) || $this->jobs[$jobId]['status'] !== Hirale_Queue_Model_Job::STATUS_PUBLISHED) {
+            return false;
+        }
+        if ($streamId !== null && $streamId !== '') {
+            $currentStreamId = (string) ($this->jobs[$jobId]['stream_id'] ?? '');
+            if ($currentStreamId !== '' && $currentStreamId !== $streamId) {
+                return false;
+            }
+        }
+
         $this->jobs[$jobId]['status'] = Hirale_Queue_Model_Job::STATUS_RUNNING;
+
+        return true;
     }
 
     public function markSucceeded(string $jobId): void
@@ -110,18 +161,35 @@ class FakeJobRepository extends Hirale_Queue_Model_JobRepository
         $this->jobs[$jobId]['last_error'] = $lastError;
     }
 
-    public function retry(string $jobId): void
+    public function retry(string $jobId): bool
     {
+        if (!isset($this->jobs[$jobId]) || !in_array($this->jobs[$jobId]['status'], [Hirale_Queue_Model_Job::STATUS_FAILED, Hirale_Queue_Model_Job::STATUS_CANCELED], true)) {
+            return false;
+        }
+
         $this->jobs[$jobId]['status'] = Hirale_Queue_Model_Job::STATUS_QUEUED;
         $this->jobs[$jobId]['attempt'] = 0;
         $this->jobs[$jobId]['stream_id'] = null;
         $this->jobs[$jobId]['last_error'] = null;
+
+        return true;
     }
 
-    public function cancel(string $jobId): void
+    public function cancel(string $jobId): bool
     {
+        if (!isset($this->jobs[$jobId]) || !in_array($this->jobs[$jobId]['status'], [
+            Hirale_Queue_Model_Job::STATUS_QUEUED,
+            Hirale_Queue_Model_Job::STATUS_RETRY_WAIT,
+            Hirale_Queue_Model_Job::STATUS_PUBLISHING,
+            Hirale_Queue_Model_Job::STATUS_PUBLISHED,
+        ], true)) {
+            return false;
+        }
+
         $this->jobs[$jobId]['status'] = Hirale_Queue_Model_Job::STATUS_CANCELED;
         $this->jobs[$jobId]['stream_id'] = null;
+
+        return true;
     }
 
     public function purgeFinished(int $olderThanDays): int

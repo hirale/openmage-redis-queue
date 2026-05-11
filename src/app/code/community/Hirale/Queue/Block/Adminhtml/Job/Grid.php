@@ -82,11 +82,13 @@ class Hirale_Queue_Block_Adminhtml_Job_Grid extends Mage_Adminhtml_Block_Widget_
                     'caption' => Mage::helper('hirale_queue')->__('Retry'),
                     'url' => ['base' => '*/*/retry'],
                     'field' => 'job_id',
+                    'params' => ['form_key' => $this->getFormKey()],
                 ],
                 [
                     'caption' => Mage::helper('hirale_queue')->__('Cancel'),
                     'url' => ['base' => '*/*/cancel'],
                     'field' => 'job_id',
+                    'params' => ['form_key' => $this->getFormKey()],
                 ],
             ],
             'filter' => false,

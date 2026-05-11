@@ -43,6 +43,7 @@ class Hirale_Queue_Block_Adminhtml_Job_Stats extends Mage_Adminhtml_Block_Templa
     {
         return [
             Hirale_Queue_Model_Job::STATUS_QUEUED,
+            Hirale_Queue_Model_Job::STATUS_PUBLISHING,
             Hirale_Queue_Model_Job::STATUS_RUNNING,
             Hirale_Queue_Model_Job::STATUS_RETRY_WAIT,
             Hirale_Queue_Model_Job::STATUS_FAILED,

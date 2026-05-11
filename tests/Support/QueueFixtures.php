@@ -19,6 +19,20 @@ class CapturingTaskHandler implements Hirale_Queue_Model_TaskHandlerInterface
     }
 }
 
+class LegacyTaskHandler implements Hirale_Queue_Model_TaskHandlerInterface
+{
+    /** @var mixed */
+    public $lastTask = null;
+
+    /**
+     * @param mixed $task
+     */
+    public function handle($task)
+    {
+        $this->lastTask = $task;
+    }
+}
+
 class FailingTaskHandler implements Hirale_Queue_Model_TaskHandlerInterface
 {
     public function handle(array $task): void

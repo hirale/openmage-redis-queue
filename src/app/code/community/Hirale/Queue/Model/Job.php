@@ -5,6 +5,7 @@ declare(strict_types=1);
 class Hirale_Queue_Model_Job
 {
     public const STATUS_QUEUED = 'queued';
+    public const STATUS_PUBLISHING = 'publishing';
     public const STATUS_PUBLISHED = 'published';
     public const STATUS_RUNNING = 'running';
     public const STATUS_RETRY_WAIT = 'retry_wait';
@@ -24,6 +25,7 @@ class Hirale_Queue_Model_Job
     {
         return [
             self::STATUS_QUEUED,
+            self::STATUS_PUBLISHING,
             self::STATUS_PUBLISHED,
             self::STATUS_RUNNING,
             self::STATUS_RETRY_WAIT,

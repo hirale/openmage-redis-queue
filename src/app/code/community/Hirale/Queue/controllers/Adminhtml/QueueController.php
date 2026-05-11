@@ -2,8 +2,20 @@
 
 declare(strict_types=1);
 
+use Monolog\Level;
+
 class Hirale_Queue_Adminhtml_QueueController extends Mage_Adminhtml_Controller_Action
 {
+    public const ADMIN_RESOURCE = 'system/tools/hirale_queue';
+
+    #[\Override]
+    public function preDispatch()
+    {
+        $this->_setForcedFormKeyActions(['retry', 'cancel', 'purge', 'testConnection']);
+
+        return parent::preDispatch();
+    }
+
     public function indexAction(): void
     {
         $this->_title($this->__('System'))->_title($this->__('Tools'))->_title($this->__('Hirale Queue'));
@@ -22,7 +34,8 @@ class Hirale_Queue_Adminhtml_QueueController extends Mage_Adminhtml_Controller_A
                 $this->_getQueue()->retry($jobId);
                 $this->_getSession()->addSuccess($this->__('Queue job was queued for retry.'));
             } catch (Throwable $e) {
-                $this->_getSession()->addError($e->getMessage());
+                $this->_logException($e);
+                $this->_getSession()->addError($this->__('Queue job could not be queued for retry.'));
             }
         }
 
@@ -37,7 +50,8 @@ class Hirale_Queue_Adminhtml_QueueController extends Mage_Adminhtml_Controller_A
                 $this->_getQueue()->cancel($jobId);
                 $this->_getSession()->addSuccess($this->__('Queue job was canceled.'));
             } catch (Throwable $e) {
-                $this->_getSession()->addError($e->getMessage());
+                $this->_logException($e);
+                $this->_getSession()->addError($this->__('Queue job could not be canceled.'));
             }
         }
 
@@ -53,7 +67,8 @@ class Hirale_Queue_Adminhtml_QueueController extends Mage_Adminhtml_Controller_A
             $deleted = $this->_getQueue()->purgeByRetention(max(1, $successDays), max(1, $failureDays));
             $this->_getSession()->addSuccess($this->__('%d finished queue job(s) were purged.', $deleted));
         } catch (Throwable $e) {
-            $this->_getSession()->addError($e->getMessage());
+            $this->_logException($e);
+            $this->_getSession()->addError($this->__('Finished queue jobs could not be purged.'));
         }
 
         $this->_redirect('*/*/index');
@@ -68,7 +83,8 @@ class Hirale_Queue_Adminhtml_QueueController extends Mage_Adminhtml_Controller_A
                 $this->_getSession()->addError($this->__('Redis did not return PONG.'));
             }
         } catch (Throwable $e) {
-            $this->_getSession()->addError($e->getMessage());
+            $this->_logException($e);
+            $this->_getSession()->addError($this->__('Redis connection test failed.'));
         }
 
         $this->_redirect('*/*/index');
@@ -76,7 +92,7 @@ class Hirale_Queue_Adminhtml_QueueController extends Mage_Adminhtml_Controller_A
 
     protected function _isAllowed()
     {
-        return Mage::getSingleton('admin/session')->isAllowed('system/tools/hirale_queue');
+        return Mage::getSingleton('admin/session')->isAllowed(self::ADMIN_RESOURCE);
     }
 
     private function _getQueue(): Hirale_Queue_Model_Queue
@@ -87,5 +103,10 @@ class Hirale_Queue_Adminhtml_QueueController extends Mage_Adminhtml_Controller_A
         }
 
         return $queue;
+    }
+
+    private function _logException(Throwable $e): void
+    {
+        Mage::log($e->getMessage(), Level::Error, 'exception.log');
     }
 }

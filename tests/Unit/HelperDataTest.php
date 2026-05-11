@@ -69,7 +69,7 @@ class HelperDataTest extends TestCase
 
         $parameters = (new Hirale_Queue_Helper_Data())->getRedis()->getConnection()->getParameters();
 
-        $this->assertSame('tcp', (string) $parameters->scheme);
+        $this->assertSame('redis', (string) $parameters->scheme);
         $this->assertSame('legacy.example.test', (string) $parameters->host);
         $this->assertSame(6381, (int) $parameters->port);
         $this->assertSame(2, (int) $parameters->database);

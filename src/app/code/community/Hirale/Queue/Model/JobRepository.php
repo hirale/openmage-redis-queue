@@ -85,22 +85,77 @@ class Hirale_Queue_Model_JobRepository
         ));
     }
 
-    public function markPublished(string $jobId, string $streamId, int $attempt): void
+    public function markPublished(string $jobId, string $streamId, int $attempt): bool
     {
-        $this->_updateByJobId($jobId, [
+        return $this->_updateByJobId($jobId, [
             'status' => Hirale_Queue_Model_Job::STATUS_PUBLISHED,
             'stream_id' => $streamId,
             'attempt' => $attempt,
             'updated_at' => $this->_now(),
-        ]);
+        ], "status = '" . Hirale_Queue_Model_Job::STATUS_PUBLISHING . "'") > 0;
     }
 
-    public function markRunning(string $jobId): void
+    /**
+     * @param array<string, mixed> $job
+     */
+    public function claimForPublish(array $job): bool
     {
+        $jobId = (string) ($job['job_id'] ?? '');
+        $status = (string) ($job['status'] ?? '');
+        if ($jobId === '' || !in_array($status, [Hirale_Queue_Model_Job::STATUS_QUEUED, Hirale_Queue_Model_Job::STATUS_RETRY_WAIT], true)) {
+            return false;
+        }
+
+        return $this->_updateByJobId($jobId, [
+            'status' => Hirale_Queue_Model_Job::STATUS_PUBLISHING,
+            'updated_at' => $this->_now(),
+        ], sprintf(
+            'status = %s AND available_at <= %s',
+            $this->_quote($status),
+            $this->_quote($this->_now()),
+        )) > 0;
+    }
+
+    public function releasePublishClaim(string $jobId, string $status): void
+    {
+        if (!in_array($status, [Hirale_Queue_Model_Job::STATUS_QUEUED, Hirale_Queue_Model_Job::STATUS_RETRY_WAIT], true)) {
+            return;
+        }
+
         $this->_updateByJobId($jobId, [
+            'status' => $status,
+            'updated_at' => $this->_now(),
+        ], "status = '" . Hirale_Queue_Model_Job::STATUS_PUBLISHING . "'");
+    }
+
+    public function releaseStalePublishClaims(int $olderThanSeconds): int
+    {
+        return $this->_updateWhere([
+            'status' => Hirale_Queue_Model_Job::STATUS_QUEUED,
+            'stream_id' => null,
+            'updated_at' => $this->_now(),
+        ], sprintf(
+            'status = %s AND updated_at < %s',
+            $this->_quote(Hirale_Queue_Model_Job::STATUS_PUBLISHING),
+            $this->_quote($this->_date(time() - max(60, $olderThanSeconds))),
+        ));
+    }
+
+    public function markRunning(string $jobId, ?string $streamId = null): bool
+    {
+        $where = "status = '" . Hirale_Queue_Model_Job::STATUS_PUBLISHED . "'";
+        if ($streamId !== null && $streamId !== '') {
+            $where .= sprintf(
+                ' AND (stream_id = %s OR stream_id IS NULL OR stream_id = %s)',
+                $this->_quote($streamId),
+                $this->_quote(''),
+            );
+        }
+
+        return $this->_updateByJobId($jobId, [
             'status' => Hirale_Queue_Model_Job::STATUS_RUNNING,
             'updated_at' => $this->_now(),
-        ]);
+        ], $where) > 0;
     }
 
     public function markSucceeded(string $jobId): void
@@ -139,9 +194,9 @@ class Hirale_Queue_Model_JobRepository
         ]);
     }
 
-    public function retry(string $jobId): void
+    public function retry(string $jobId): bool
     {
-        $this->_updateByJobId($jobId, [
+        return $this->_updateByJobId($jobId, [
             'status' => Hirale_Queue_Model_Job::STATUS_QUEUED,
             'attempt' => 0,
             'stream_id' => null,
@@ -149,18 +204,28 @@ class Hirale_Queue_Model_JobRepository
             'available_at' => $this->_now(),
             'finished_at' => null,
             'updated_at' => $this->_now(),
-        ]);
+        ], sprintf(
+            "status IN ('%s','%s')",
+            Hirale_Queue_Model_Job::STATUS_FAILED,
+            Hirale_Queue_Model_Job::STATUS_CANCELED,
+        )) > 0;
     }
 
-    public function cancel(string $jobId): void
+    public function cancel(string $jobId): bool
     {
         $now = $this->_now();
-        $this->_updateByJobId($jobId, [
+        return $this->_updateByJobId($jobId, [
             'status' => Hirale_Queue_Model_Job::STATUS_CANCELED,
             'stream_id' => null,
             'finished_at' => $now,
             'updated_at' => $now,
-        ]);
+        ], sprintf(
+            "status IN ('%s','%s','%s','%s')",
+            Hirale_Queue_Model_Job::STATUS_QUEUED,
+            Hirale_Queue_Model_Job::STATUS_RETRY_WAIT,
+            Hirale_Queue_Model_Job::STATUS_PUBLISHING,
+            Hirale_Queue_Model_Job::STATUS_PUBLISHED,
+        )) > 0;
     }
 
     public function purgeFinished(int $olderThanDays): int
@@ -242,7 +307,7 @@ class Hirale_Queue_Model_JobRepository
         }
 
         return $this->_fetchAll(sprintf(
-            'SELECT * FROM %s%s ORDER BY entity_id DESC LIMIT %d',
+            'SELECT entity_id, job_id, queue_name, handler, status, attempt, max_attempts, retry_delay, timeout, stream_id, last_error, available_at, created_at, updated_at, finished_at FROM %s%s ORDER BY entity_id DESC LIMIT %d',
             $this->_getTable(),
             $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
             max(1, $limit),
@@ -268,9 +333,24 @@ class Hirale_Queue_Model_JobRepository
     /**
      * @param array<string, mixed> $values
      */
-    private function _updateByJobId(string $jobId, array $values): void
+    private function _updateByJobId(string $jobId, array $values, string $extraWhere = ''): int
     {
-        $this->_getConnection()->update($this->_getTable(), $values, 'job_id = ' . $this->_quote($jobId));
+        $where = 'job_id = ' . $this->_quote($jobId);
+        if ($extraWhere !== '') {
+            $where .= ' AND ' . $extraWhere;
+        }
+
+        return $this->_updateWhere($values, $where);
+    }
+
+    /**
+     * @param array<string, mixed> $values
+     */
+    private function _updateWhere(array $values, string $where): int
+    {
+        $result = $this->_getConnection()->update($this->_getTable(), $values, $where);
+
+        return is_int($result) ? $result : (int) (bool) $result;
     }
 
     private function _delete(string $where): int
@@ -345,9 +425,7 @@ class Hirale_Queue_Model_JobRepository
      */
     private function _encode($value): string
     {
-        $encoded = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
-        return is_string($encoded) ? $encoded : '{}';
+        return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     }
 
     private function _now(): string

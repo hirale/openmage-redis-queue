@@ -8,6 +8,7 @@ use HiraleQueue\Tests\Support\CapturingTaskHandler;
 use HiraleQueue\Tests\Support\FailingTaskHandler;
 use HiraleQueue\Tests\Support\FakeJobRepository;
 use HiraleQueue\Tests\Support\FakeRedis;
+use HiraleQueue\Tests\Support\LegacyTaskHandler;
 use HiraleQueue\Tests\Support\RedisHelper;
 use HiraleQueue\Tests\Support\RedisThrowingHelper;
 use Hirale_Queue_Model_Job;
@@ -101,10 +102,10 @@ class TaskTest extends TestCase
             [
                 'handler' => 'test/handler',
                 'data' => ['sku' => 'ABC'],
-                'metadata' => [],
                 'retry_count' => '3',
-                'max_attempts' => '3',
                 'stream_id' => '1700000000000-0',
+                'metadata' => [],
+                'max_attempts' => '3',
                 'attempt' => '1',
             ],
         ], $tasks);
@@ -139,12 +140,54 @@ class TaskTest extends TestCase
         ]);
         $handler = new CapturingTaskHandler();
         Mage::setModel('test/handler', $handler);
+        Mage::setStoreConfig('hirale_queue/settings/enabled', '1');
 
         $processed = $this->createTask($redis)->processBatch();
 
         $this->assertSame(1, $processed);
         $this->assertSame(['sku' => 'ABC'], $handler->lastTask['data']);
         $this->assertSame(Hirale_Queue_Model_Job::STATUS_SUCCEEDED, $this->repository->jobs['job-success']['status']);
+    }
+
+    public function testProcessBatchRetriesMessageWithInvalidJsonPayloadWithoutRunningHandler(): void
+    {
+        $redis = new FakeRedis();
+        $redis->queueResponse(new ServerException('BUSYGROUP Consumer Group name already exists'));
+        $redis->queueResponse([]);
+        $redis->queueResponse([
+            [
+                'test_stream',
+                [
+                    [
+                        '1700000000000-0',
+                        [
+                            'job_id',
+                            'job-invalid-json',
+                            'handler',
+                            'test/handler',
+                            'data',
+                            '{"sku":',
+                            'attempt',
+                            '1',
+                            'max_attempts',
+                            '2',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $handler = new CapturingTaskHandler();
+        Mage::setModel('test/handler', $handler);
+        Mage::setStoreConfig('hirale_queue/settings/enabled', '1');
+
+        $processed = $this->createTask($redis)->processBatch();
+
+        $this->assertSame(1, $processed);
+        $this->assertNull($handler->lastTask);
+        $this->assertSame(Hirale_Queue_Model_Job::STATUS_RETRY_WAIT, $this->repository->jobs['job-invalid-json']['status']);
+        $this->assertStringContainsString('Invalid queue payload JSON', $this->repository->jobs['job-invalid-json']['last_error']);
+        $this->assertSame(['XACK', 'test_stream', 'test_group', '1700000000000-0'], $redis->commands[3]);
+        $this->assertSame(['XDEL', 'test_stream', '1700000000000-0'], $redis->commands[4]);
     }
 
     public function testDefaultConsumerNameIsRecoverableAcrossCronRuns(): void
@@ -243,6 +286,81 @@ class TaskTest extends TestCase
         $this->assertSame(Hirale_Queue_Model_Job::STATUS_SUCCEEDED, $this->repository->jobs['job-success']['status']);
         $this->assertSame(['XACK', 'test_stream', 'test_group', '1700000000000-0'], $redis->commands[0]);
         $this->assertSame(['XDEL', 'test_stream', '1700000000000-0'], $redis->commands[1]);
+    }
+
+    public function testProcessTaskAcceptsLegacyHandlerSignature(): void
+    {
+        $redis = new FakeRedis();
+        $handler = new LegacyTaskHandler();
+        Mage::setModel('test/legacy', $handler);
+
+        $task = [
+            'stream_id' => '1700000000000-0',
+            'job_id' => 'job-legacy',
+            'handler' => 'test/legacy',
+            'data' => ['sku' => 'ABC'],
+            'attempt' => '1',
+            'max_attempts' => '3',
+        ];
+
+        $this->createTask($redis)->processTask($task);
+
+        $this->assertSame($task, $handler->lastTask);
+        $this->assertSame(Hirale_Queue_Model_Job::STATUS_SUCCEEDED, $this->repository->jobs['job-legacy']['status']);
+    }
+
+    public function testProcessTaskAcknowledgesCanceledJobWithoutRunningHandler(): void
+    {
+        $redis = new FakeRedis();
+        $handler = new CapturingTaskHandler();
+        Mage::setModel('test/handler', $handler);
+        $taskModel = $this->createTask($redis);
+        $this->repository->create([
+            'job_id' => 'job-canceled',
+            'handler' => 'test/handler',
+            'status' => Hirale_Queue_Model_Job::STATUS_CANCELED,
+        ]);
+
+        $this->repository->cancel('job-canceled');
+        $taskModel->processTask([
+            'stream_id' => '1700000000000-0',
+            'job_id' => 'job-canceled',
+            'handler' => 'test/handler',
+            'data' => ['sku' => 'ABC'],
+            'attempt' => '1',
+            'max_attempts' => '3',
+        ]);
+
+        $this->assertNull($handler->lastTask);
+        $this->assertSame(Hirale_Queue_Model_Job::STATUS_CANCELED, $this->repository->jobs['job-canceled']['status']);
+        $this->assertSame(['XACK', 'test_stream', 'test_group', '1700000000000-0'], $redis->commands[0]);
+        $this->assertSame(['XDEL', 'test_stream', '1700000000000-0'], $redis->commands[1]);
+    }
+
+    public function testProcessTaskLeavesPublishingMessagePendingUntilPublishCompletes(): void
+    {
+        $redis = new FakeRedis();
+        $handler = new CapturingTaskHandler();
+        Mage::setModel('test/handler', $handler);
+        $taskModel = $this->createTask($redis);
+        $this->repository->create([
+            'job_id' => 'job-publishing',
+            'handler' => 'test/handler',
+            'status' => Hirale_Queue_Model_Job::STATUS_PUBLISHING,
+        ]);
+
+        $taskModel->processTask([
+            'stream_id' => '1700000000000-0',
+            'job_id' => 'job-publishing',
+            'handler' => 'test/handler',
+            'data' => ['sku' => 'ABC'],
+            'attempt' => '1',
+            'max_attempts' => '3',
+        ]);
+
+        $this->assertNull($handler->lastTask);
+        $this->assertSame(Hirale_Queue_Model_Job::STATUS_PUBLISHING, $this->repository->jobs['job-publishing']['status']);
+        $this->assertSame([], $redis->commands);
     }
 
     public function testProcessTaskRequeuesFailedHandlerWithOneFewerRetry(): void

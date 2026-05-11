@@ -137,15 +137,26 @@ class Hirale_Queue_Model_Task
         }
 
         try {
+            $jobId = $this->_getQueueService()->markRunning($task);
+            if ($jobId === '') {
+                if ($this->_getQueueService()->shouldAcknowledgeSkippedTask($task)) {
+                    $this->_ackTask((string) $task['stream_id']);
+                }
+                return;
+            }
+
+            if (!empty($task['payload_error'])) {
+                throw new RuntimeException((string) $task['payload_error']);
+            }
+
             $handler = Mage::getModel((string) $task['handler']);
-            if (!$handler instanceof Hirale_Queue_Model_TaskHandlerInterface) {
+            if (!$handler instanceof Hirale_Queue_Model_TaskHandlerInterface || !is_callable([$handler, 'handle'])) {
                 throw new RuntimeException(sprintf(
-                    'Queue handler "%s" must implement Hirale_Queue_Model_TaskHandlerInterface.',
+                    'Queue handler "%s" must implement Hirale_Queue_Model_TaskHandlerInterface::handle().',
                     (string) $task['handler'],
                 ));
             }
 
-            $jobId = $this->_getQueueService()->markRunning($task);
             $handler->handle($task);
             $this->_getQueueService()->markSucceeded($jobId);
             $this->_ackTask((string) $task['stream_id']);
@@ -179,7 +190,12 @@ class Hirale_Queue_Model_Task
         } else {
             $this->_getQueueService()->markFailed($jobId, $e->getMessage());
             Mage::log(
-                sprintf('Task exhausted retries: %s', print_r($task, true)),
+                sprintf(
+                    'Task exhausted retries: handler=%s job_id=%s stream_id=%s',
+                    (string) ($task['handler'] ?? ''),
+                    (string) ($task['job_id'] ?? $task['id'] ?? ''),
+                    (string) ($task['stream_id'] ?? ''),
+                ),
                 Level::Error,
                 'exception.log',
             );
@@ -291,8 +307,13 @@ class Hirale_Queue_Model_Task
      */
     private function _normalizeTaskPayload(array $payload): array
     {
-        $payload['data'] = $this->_decodePayloadData($payload['data'] ?? null);
-        $payload['metadata'] = $this->_decodePayloadData($payload['metadata'] ?? null);
+        $dataError = null;
+        $metadataError = null;
+        $payload['data'] = $this->_decodePayloadData($payload['data'] ?? null, $dataError);
+        $payload['metadata'] = $this->_decodePayloadData($payload['metadata'] ?? null, $metadataError);
+        if ($dataError !== null || $metadataError !== null) {
+            $payload['payload_error'] = $dataError ?? $metadataError;
+        }
         if (!isset($payload['max_attempts']) && isset($payload['retry_count'])) {
             $payload['max_attempts'] = $payload['retry_count'];
         }
@@ -356,14 +377,20 @@ class Hirale_Queue_Model_Task
      * @param mixed $value
      * @return mixed
      */
-    private function _decodePayloadData($value)
+    private function _decodePayloadData($value, ?string &$error = null)
     {
+        $error = null;
         if (!is_string($value) || $value === '') {
             return [];
         }
 
         $decoded = json_decode($value, true);
-        return json_last_error() === JSON_ERROR_NONE ? $decoded : [];
+        if (json_last_error() === JSON_ERROR_NONE) {
+            return $decoded;
+        }
+
+        $error = 'Invalid queue payload JSON: ' . json_last_error_msg();
+        return [];
     }
 
     private function _getCount(): int

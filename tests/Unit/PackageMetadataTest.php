@@ -89,6 +89,8 @@ class PackageMetadataTest extends TestCase
         $adminhtmlXml = simplexml_load_file($this->rootPath('src/app/code/community/Hirale/Queue/etc/adminhtml.xml'));
         $controllerPath = $this->rootPath('src/app/code/community/Hirale/Queue/controllers/Adminhtml/QueueController.php');
         $legacyControllerPath = $this->rootPath('src/app/code/community/Hirale/Queue/controllers/Adminhtml/Hirale/QueueController.php');
+        $jobBlockPath = $this->rootPath('src/app/code/community/Hirale/Queue/Block/Adminhtml/Job.php');
+        $gridBlockPath = $this->rootPath('src/app/code/community/Hirale/Queue/Block/Adminhtml/Job/Grid.php');
 
         $this->assertSame(
             'adminhtml/queue/index',
@@ -99,6 +101,22 @@ class PackageMetadataTest extends TestCase
         $this->assertStringContainsString(
             'class Hirale_Queue_Adminhtml_QueueController',
             (string) file_get_contents($controllerPath),
+        );
+        $this->assertStringContainsString(
+            "public const ADMIN_RESOURCE = 'system/tools/hirale_queue'",
+            (string) file_get_contents($controllerPath),
+        );
+        $this->assertStringContainsString(
+            "\$this->_setForcedFormKeyActions(['retry', 'cancel', 'purge', 'testConnection'])",
+            (string) file_get_contents($controllerPath),
+        );
+        $this->assertStringContainsString(
+            "'form_key' => \$this->getFormKey()",
+            (string) file_get_contents($jobBlockPath),
+        );
+        $this->assertStringContainsString(
+            "'params' => ['form_key' => \$this->getFormKey()]",
+            (string) file_get_contents($gridBlockPath),
         );
         $this->assertFileExists($legacyControllerPath);
         $this->assertStringContainsString(
@@ -113,6 +131,10 @@ class PackageMetadataTest extends TestCase
         $mahoCommandPath = $this->rootPath('src/lib/MahoCLI/Commands/HiraleQueueWork.php');
 
         $this->assertFileExists($shellPath);
+        $this->assertStringContainsString(
+            'declare(strict_types=1);',
+            (string) file_get_contents($shellPath),
+        );
         $this->assertStringContainsString(
             'class Hirale_Queue_Shell_Worker extends Mage_Shell_Abstract',
             (string) file_get_contents($shellPath),
