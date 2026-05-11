@@ -131,6 +131,7 @@ require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/Job.php';
 require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/JobRepository.php';
 require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/Queue.php';
 require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/ConfigMigrator.php';
+require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/Worker.php';
 require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/Platform/AdapterInterface.php';
 require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/Platform/Maho.php';
 require_once __DIR__ . '/../src/app/code/community/Hirale/Queue/Model/Platform/Openmage.php';

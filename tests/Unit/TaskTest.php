@@ -39,6 +39,14 @@ class TaskTest extends TestCase
         $this->assertSame([], Mage::$exceptions);
     }
 
+    public function testProcessBatchReturnsZeroBeforeLoadingRedisWhenWorkerIsDisabled(): void
+    {
+        Mage::setStoreConfig('hirale_queue/settings/enabled', '0');
+        Mage::setHelper('hirale_queue', new RedisThrowingHelper());
+
+        $this->assertSame(0, (new Hirale_Queue_Model_Task())->processBatch());
+    }
+
     public function testAddTaskWritesNormalizedPayloadToStream(): void
     {
         $redis = new FakeRedis();
@@ -102,6 +110,43 @@ class TaskTest extends TestCase
         ], $tasks);
     }
 
+    public function testProcessBatchProcessesOneFetchedBatch(): void
+    {
+        $redis = new FakeRedis();
+        $redis->queueResponse(new ServerException('BUSYGROUP Consumer Group name already exists'));
+        $redis->queueResponse([]);
+        $redis->queueResponse([
+            [
+                'test_stream',
+                [
+                    [
+                        '1700000000000-0',
+                        [
+                            'job_id',
+                            'job-success',
+                            'handler',
+                            'test/handler',
+                            'data',
+                            '{"sku":"ABC"}',
+                            'attempt',
+                            '1',
+                            'max_attempts',
+                            '3',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $handler = new CapturingTaskHandler();
+        Mage::setModel('test/handler', $handler);
+
+        $processed = $this->createTask($redis)->processBatch();
+
+        $this->assertSame(1, $processed);
+        $this->assertSame(['sku' => 'ABC'], $handler->lastTask['data']);
+        $this->assertSame(Hirale_Queue_Model_Job::STATUS_SUCCEEDED, $this->repository->jobs['job-success']['status']);
+    }
+
     public function testDefaultConsumerNameIsRecoverableAcrossCronRuns(): void
     {
         Mage::setHelper('hirale_queue', new RedisHelper(new FakeRedis()));
@@ -115,6 +160,66 @@ class TaskTest extends TestCase
         Mage::setHelper('hirale_queue', new RedisHelper(new FakeRedis()));
 
         $this->assertSame('custom_worker', $this->invokePrivateMethod(new Hirale_Queue_Model_Task(), '_getConsumer'));
+    }
+
+    public function testRuntimeConsumerOverridesConfiguredConsumer(): void
+    {
+        $redis = new FakeRedis();
+        $redis->queueResponse(new ServerException('BUSYGROUP Consumer Group name already exists'));
+        $redis->queueResponse([]);
+        $redis->queueResponse([]);
+
+        $this->createTask($redis)
+            ->setConsumer('runtime_worker')
+            ->fetchTasks();
+
+        $this->assertSame('runtime_worker', $redis->commands[1][3]);
+        $this->assertSame('runtime_worker', $redis->commands[2][3]);
+    }
+
+    public function testRuntimeCountOverridesConfiguredCount(): void
+    {
+        $redis = new FakeRedis();
+        $redis->queueResponse(new ServerException('BUSYGROUP Consumer Group name already exists'));
+        $redis->queueResponse([]);
+        $redis->queueResponse([]);
+
+        $this->createTask($redis)
+            ->setCount(25)
+            ->fetchTasks();
+
+        $this->assertSame('25', $redis->commands[1][7]);
+        $this->assertSame('25', $redis->commands[2][5]);
+    }
+
+    public function testRuntimePublishLimitOverridesConfiguredPublishLimit(): void
+    {
+        $redis = new FakeRedis();
+        $redis->queueResponse('1700000000000-0');
+        $redis->queueResponse('1700000000000-1');
+        $redis->queueResponse(new ServerException('BUSYGROUP Consumer Group name already exists'));
+        $redis->queueResponse([]);
+        $redis->queueResponse([]);
+
+        $task = $this->createTask($redis);
+        $this->repository->create([
+            'job_id' => 'job-1',
+            'handler' => 'test/handler',
+        ]);
+        $this->repository->create([
+            'job_id' => 'job-2',
+            'handler' => 'test/handler',
+        ]);
+        $this->repository->create([
+            'job_id' => 'job-3',
+            'handler' => 'test/handler',
+        ]);
+
+        $task->setPublishLimit(2)->fetchTasks();
+
+        $this->assertSame(Hirale_Queue_Model_Job::STATUS_PUBLISHED, $this->repository->jobs['job-1']['status']);
+        $this->assertSame(Hirale_Queue_Model_Job::STATUS_PUBLISHED, $this->repository->jobs['job-2']['status']);
+        $this->assertSame(Hirale_Queue_Model_Job::STATUS_QUEUED, $this->repository->jobs['job-3']['status']);
     }
 
     public function testProcessTaskAcknowledgesSuccessfulHandler(): void

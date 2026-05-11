@@ -72,6 +72,117 @@ The queue worker is disabled by default. Configure Redis, use **Test Redis
 Connection** from `System > Tools > Hirale Queue`, then enable the worker and
 make sure cron is running.
 
+### Consumer modes
+
+You can consume queued jobs in either mode:
+
+| Mode | Command | Best for |
+| --- | --- | --- |
+| Cron | Existing platform cron runs `hirale_queue/task::process` every minute | Simple installs, low volume, delay-tolerant work |
+| Long-running worker | OpenMage: `php shell/hirale_queue_worker.php`; Maho: `./maho hirale:queue:work` | Production queues, lower latency, multiple workers |
+
+Cron mode is the default compatibility path. It uses the module's existing
+`hirale_queue_process` cron job and does not require another process manager.
+
+Long-running worker mode keeps a foreground CLI process alive and repeatedly
+reads Redis Streams. Run it under systemd or Supervisor so the process is
+restarted after deploys, crashes, or its configured runtime limit.
+
+OpenMage/Magento shell worker:
+
+```bash
+php shell/hirale_queue_worker.php --consumer=hirale_queue_01 --max-runtime=3600 --max-jobs=10000
+```
+
+Maho CLI worker:
+
+```bash
+./maho hirale:queue:work --consumer=hirale_queue_01 --max-runtime=3600 --max-jobs=10000
+```
+
+If the Maho command is not listed after install or update, run
+`composer dump-autoload`, then verify it with `./maho list | grep hirale`.
+
+Available worker options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--consumer` | Generated from host and PID | Redis consumer name. Use a unique name per long-running worker. |
+| `--count` | System config `count` | Messages to read per batch. |
+| `--publish-limit` | System config `publish_limit` | Due DB jobs to publish before each worker read. |
+| `--max-runtime` | `3600` | Exit after this many seconds so the process manager can restart a fresh PHP process. |
+| `--max-jobs` | `10000` | Exit after this many processed jobs. |
+| `--idle-sleep` | `1` | Sleep seconds after an empty batch. |
+| `--once` | Off | Process one batch and exit. Useful for smoke tests. |
+
+Do not run multiple long-lived workers with the same `--consumer` name. Redis
+consumer groups use the consumer name to track pending work.
+
+#### systemd example
+
+OpenMage template unit, for example `/etc/systemd/system/hirale-queue@.service`:
+
+```ini
+[Unit]
+Description=Hirale Redis Queue worker %i
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/openmage
+User=www-data
+ExecStart=/usr/bin/php shell/hirale_queue_worker.php --consumer=hirale_queue_%i --max-runtime=3600 --max-jobs=10000
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Maho template unit, for example `/etc/systemd/system/hirale-queue@.service`:
+
+```ini
+[Unit]
+Description=Hirale Redis Queue worker %i
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/maho
+User=www-data
+ExecStart=/usr/bin/php ./maho hirale:queue:work --consumer=hirale_queue_%i --max-runtime=3600 --max-jobs=10000
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Example operations:
+
+```bash
+sudo systemctl enable --now hirale-queue@01
+sudo systemctl enable --now hirale-queue@02
+```
+
+#### Supervisor example
+
+```ini
+[program:hirale-queue]
+directory=/var/www/openmage
+command=/usr/bin/php shell/hirale_queue_worker.php --consumer=%(program_name)s_%(process_num)02d --max-runtime=3600 --max-jobs=10000
+process_name=%(program_name)s_%(process_num)02d
+numprocs=2
+user=www-data
+autostart=true
+autorestart=true
+stopwaitsecs=60
+```
+
 ### Admin operations
 
 Go to `System > Tools > Hirale Queue` to inspect queue health and job state.

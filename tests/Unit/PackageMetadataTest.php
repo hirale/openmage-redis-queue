@@ -45,6 +45,20 @@ class PackageMetadataTest extends TestCase
         $this->assertSame('^10.5', $composer['require-dev']['phpunit/phpunit']);
     }
 
+    public function testComposerMetadataMapsPlatformNativeWorkerEntrypoints(): void
+    {
+        $composer = $this->readJson('composer.json');
+
+        $this->assertContains(
+            ['src/shell/hirale_queue_worker.php', 'shell/hirale_queue_worker.php'],
+            $composer['extra']['map'],
+        );
+        $this->assertContains(
+            ['src/lib/MahoCLI/Commands/HiraleQueueWork.php', 'lib/MahoCLI/Commands/HiraleQueueWork.php'],
+            $composer['extra']['map'],
+        );
+    }
+
     public function testSystemConfigUsesHiraleTabAndQueueSection(): void
     {
         $systemXml = simplexml_load_file($this->rootPath('src/app/code/community/Hirale/Queue/etc/system.xml'));
@@ -90,6 +104,23 @@ class PackageMetadataTest extends TestCase
         $this->assertStringContainsString(
             'class Hirale_Queue_Adminhtml_Hirale_QueueController extends Hirale_Queue_Adminhtml_QueueController',
             (string) file_get_contents($legacyControllerPath),
+        );
+    }
+
+    public function testWorkerEntrypointsExistForOpenMageAndMaho(): void
+    {
+        $shellPath = $this->rootPath('src/shell/hirale_queue_worker.php');
+        $mahoCommandPath = $this->rootPath('src/lib/MahoCLI/Commands/HiraleQueueWork.php');
+
+        $this->assertFileExists($shellPath);
+        $this->assertStringContainsString(
+            'class Hirale_Queue_Shell_Worker extends Mage_Shell_Abstract',
+            (string) file_get_contents($shellPath),
+        );
+        $this->assertFileExists($mahoCommandPath);
+        $this->assertStringContainsString(
+            "name: 'hirale:queue:work'",
+            (string) file_get_contents($mahoCommandPath),
         );
     }
 

@@ -44,6 +44,14 @@
             [
                 "src/app/code/community/Hirale/Queue",
                 "app/code/community/Hirale/Queue"
+            ],
+            [
+                "src/shell/hirale_queue_worker.php",
+                "shell/hirale_queue_worker.php"
+            ],
+            [
+                "src/lib/MahoCLI/Commands/HiraleQueueWork.php",
+                "lib/MahoCLI/Commands/HiraleQueueWork.php"
             ]
         ]
     },

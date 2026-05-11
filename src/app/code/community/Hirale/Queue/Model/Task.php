@@ -10,6 +10,7 @@ class Hirale_Queue_Model_Task
 {
     private ?Client $_redis = null;
     private ?int $_count = null;
+    private ?int $_publishLimit = null;
     private ?string $_streamKey = null;
     private ?string $_group = null;
     private ?string $_consumer = null;
@@ -67,23 +68,57 @@ class Hirale_Queue_Model_Task
      */
     public function process(): void
     {
-        $helper = Mage::helper('hirale_queue');
-        if (!$helper instanceof Hirale_Queue_Helper_Data || !$helper->getConfigFlag('enabled')) {
-            return;
-        }
-
         try {
-            $tasks = $this->fetchTasks();
-            if (empty($tasks)) {
-                return;
-            }
-
-            foreach ($tasks as $task) {
-                $this->processTask($task);
-            }
+            $this->processBatch();
         } catch (Throwable $e) {
             Mage::logException($e);
         }
+    }
+
+    /**
+     * Process one worker batch.
+     *
+     * @return int Number of tasks processed in this batch.
+     */
+    public function processBatch(): int
+    {
+        $helper = Mage::helper('hirale_queue');
+        if (!$helper instanceof Hirale_Queue_Helper_Data || !$helper->getConfigFlag('enabled')) {
+            return 0;
+        }
+
+        $tasks = $this->fetchTasks();
+        if (empty($tasks)) {
+            return 0;
+        }
+
+        foreach ($tasks as $task) {
+            $this->processTask($task);
+        }
+
+        return count($tasks);
+    }
+
+    public function setConsumer(string $consumer): self
+    {
+        $consumer = trim($consumer);
+        $this->_consumer = $consumer !== '' ? $consumer : 'hirale_queue_worker';
+
+        return $this;
+    }
+
+    public function setCount(int $count): self
+    {
+        $this->_count = max(1, $count);
+
+        return $this;
+    }
+
+    public function setPublishLimit(int $publishLimit): self
+    {
+        $this->_publishLimit = max(1, $publishLimit);
+
+        return $this;
     }
 
     /**
@@ -342,7 +377,11 @@ class Hirale_Queue_Model_Task
 
     private function _getPublishLimit(): int
     {
-        return max(1, (int) ($this->_getQueueHelper()->getConfigValue('publish_limit', 100) ?: 100));
+        if ($this->_publishLimit === null) {
+            $this->_publishLimit = max(1, (int) ($this->_getQueueHelper()->getConfigValue('publish_limit', 100) ?: 100));
+        }
+
+        return $this->_publishLimit;
     }
 
     private function _getPendingIdleSeconds(): int
