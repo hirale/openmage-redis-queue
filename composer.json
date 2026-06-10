@@ -35,6 +35,9 @@
                 "src/app/code/community/Hirale/Queue",
                 "app/code/community/Hirale/Queue"
             ]
-        ]
+        ],
+        "branch-alias": {
+            "dev-openmage": "1.x-dev"
+        }
     }
 }
