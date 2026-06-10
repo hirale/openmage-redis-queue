@@ -29,7 +29,7 @@ class Hirale_Queue_Model_Audit
                 'action'         => $action,
                 'job_id'         => $jobId,
                 'ip'             => $request ? (string) $request->getClientIp() : null,
-                'created_at'     => Mage_Core_Model_Locale::nowUtc(),
+                'created_at'     => gmdate('Y-m-d H:i:s'),
             ]);
         } catch (Exception $e) {
             Mage::logException($e);
@@ -63,12 +63,12 @@ class Hirale_Queue_Model_Audit
         );
     }
 
-    protected function readAdapter(): \Maho\Db\Adapter\AdapterInterface
+    protected function readAdapter(): Varien_Db_Adapter_Interface
     {
         return Mage::getSingleton('core/resource')->getConnection('hirale_queue_read');
     }
 
-    protected function writeAdapter(): \Maho\Db\Adapter\AdapterInterface
+    protected function writeAdapter(): Varien_Db_Adapter_Interface
     {
         return Mage::getSingleton('core/resource')->getConnection('hirale_queue_write');
     }

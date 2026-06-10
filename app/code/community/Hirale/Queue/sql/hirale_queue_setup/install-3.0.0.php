@@ -20,87 +20,87 @@ $connection = $installer->getConnection();
 $tableJob = $installer->getTable('hirale_queue/job');
 if (!$connection->isTableExists($tableJob)) {
     $table = $connection->newTable($tableJob)
-        ->addColumn('entity_id', \Maho\Db\Ddl\Table::TYPE_INTEGER, null, [
+        ->addColumn('entity_id', Varien_Db_Ddl_Table::TYPE_INTEGER, null, [
             'unsigned' => true,
             'identity' => true,
             'primary'  => true,
             'nullable' => false,
         ], 'Entity ID')
-        ->addColumn('job_id', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 64, [
+        ->addColumn('job_id', Varien_Db_Ddl_Table::TYPE_VARCHAR, 64, [
             'nullable' => false,
         ], 'Stable job ID across the message lifecycle')
-        ->addColumn('transport_id', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 128, [
+        ->addColumn('transport_id', Varien_Db_Ddl_Table::TYPE_VARCHAR, 128, [
             'nullable' => true,
         ], 'Backend-specific message id (Redis stream id, AMQP delivery tag, SQS message id, Doctrine row id)')
-        ->addColumn('queue_name', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 64, [
+        ->addColumn('queue_name', Varien_Db_Ddl_Table::TYPE_VARCHAR, 64, [
             'nullable' => false,
             'default'  => 'default',
         ], 'Logical queue name')
-        ->addColumn('message_class', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 255, [
+        ->addColumn('message_class', Varien_Db_Ddl_Table::TYPE_VARCHAR, 255, [
             'nullable' => false,
         ], 'Symfony Messenger message class FQCN')
-        ->addColumn('status', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 32, [
+        ->addColumn('status', Varien_Db_Ddl_Table::TYPE_VARCHAR, 32, [
             'nullable' => false,
             'default'  => 'queued',
         ], 'Job lifecycle state')
-        ->addColumn('payload_json', \Maho\Db\Ddl\Table::TYPE_TEXT, '4M', [
+        ->addColumn('payload_json', Varien_Db_Ddl_Table::TYPE_TEXT, '4M', [
             'nullable' => true,
         ], 'Serialized Messenger envelope payload')
-        ->addColumn('metadata_json', \Maho\Db\Ddl\Table::TYPE_TEXT, 524288, [
+        ->addColumn('metadata_json', Varien_Db_Ddl_Table::TYPE_TEXT, 524288, [
             'nullable' => true,
         ], 'Operator-supplied metadata')
-        ->addColumn('store_id', \Maho\Db\Ddl\Table::TYPE_SMALLINT, null, [
+        ->addColumn('store_id', Varien_Db_Ddl_Table::TYPE_SMALLINT, null, [
             'unsigned' => true,
             'nullable' => true,
         ], 'Dispatching store ID')
-        ->addColumn('attempt', \Maho\Db\Ddl\Table::TYPE_INTEGER, null, [
+        ->addColumn('attempt', Varien_Db_Ddl_Table::TYPE_INTEGER, null, [
             'nullable' => false,
             'default'  => 0,
         ], 'Current attempt counter')
-        ->addColumn('max_attempts', \Maho\Db\Ddl\Table::TYPE_INTEGER, null, [
+        ->addColumn('max_attempts', Varien_Db_Ddl_Table::TYPE_INTEGER, null, [
             'nullable' => false,
             'default'  => 3,
         ], 'Retry limit captured at dispatch')
-        ->addColumn('retry_backoff_base', \Maho\Db\Ddl\Table::TYPE_INTEGER, null, [
+        ->addColumn('retry_backoff_base', Varien_Db_Ddl_Table::TYPE_INTEGER, null, [
             'nullable' => false,
             'default'  => 5,
         ], 'Backoff base seconds captured at dispatch')
-        ->addColumn('retry_backoff_cap', \Maho\Db\Ddl\Table::TYPE_INTEGER, null, [
+        ->addColumn('retry_backoff_cap', Varien_Db_Ddl_Table::TYPE_INTEGER, null, [
             'nullable' => false,
             'default'  => 3600,
         ], 'Backoff cap seconds captured at dispatch')
-        ->addColumn('last_error', \Maho\Db\Ddl\Table::TYPE_TEXT, 65536, [
+        ->addColumn('last_error', Varien_Db_Ddl_Table::TYPE_TEXT, 65536, [
             'nullable' => true,
         ], 'Most recent failure reason excerpt')
-        ->addColumn('cancel_requested', \Maho\Db\Ddl\Table::TYPE_SMALLINT, null, [
+        ->addColumn('cancel_requested', Varien_Db_Ddl_Table::TYPE_SMALLINT, null, [
             'nullable' => false,
             'default'  => 0,
         ], 'Cooperative cancel flag — handler checks at safe boundary')
-        ->addColumn('available_at', \Maho\Db\Ddl\Table::TYPE_DATETIME, null, [
+        ->addColumn('available_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => false,
-            'default'  => \Maho\Db\Ddl\Table::TIMESTAMP_INIT,
+            'default'  => Varien_Db_Ddl_Table::TIMESTAMP_INIT,
         ], 'Next execution time (for delayed / retry_wait jobs)')
-        ->addColumn('dispatched_at', \Maho\Db\Ddl\Table::TYPE_DATETIME, null, [
+        ->addColumn('dispatched_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => true,
         ], 'When the envelope was sent to the transport')
-        ->addColumn('started_at', \Maho\Db\Ddl\Table::TYPE_DATETIME, null, [
+        ->addColumn('started_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => true,
         ], 'When the worker began processing')
-        ->addColumn('finished_at', \Maho\Db\Ddl\Table::TYPE_DATETIME, null, [
+        ->addColumn('finished_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => true,
         ], 'When the job reached a terminal state')
-        ->addColumn('created_at', \Maho\Db\Ddl\Table::TYPE_DATETIME, null, [
+        ->addColumn('created_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => false,
-            'default'  => \Maho\Db\Ddl\Table::TIMESTAMP_INIT,
+            'default'  => Varien_Db_Ddl_Table::TIMESTAMP_INIT,
         ], 'Row creation time')
-        ->addColumn('updated_at', \Maho\Db\Ddl\Table::TYPE_DATETIME, null, [
+        ->addColumn('updated_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => false,
-            'default'  => \Maho\Db\Ddl\Table::TIMESTAMP_INIT_UPDATE,
+            'default'  => Varien_Db_Ddl_Table::TIMESTAMP_INIT_UPDATE,
         ], 'Last update time')
         ->addIndex(
-            $installer->getIdxName('hirale_queue/job', ['job_id'], \Maho\Db\Adapter\AdapterInterface::INDEX_TYPE_UNIQUE),
+            $installer->getIdxName('hirale_queue/job', ['job_id'], Varien_Db_Adapter_Interface::INDEX_TYPE_UNIQUE),
             ['job_id'],
-            ['type' => \Maho\Db\Adapter\AdapterInterface::INDEX_TYPE_UNIQUE],
+            ['type' => Varien_Db_Adapter_Interface::INDEX_TYPE_UNIQUE],
         )
         ->addIndex(
             $installer->getIdxName('hirale_queue/job', ['status', 'available_at']),
@@ -124,31 +124,31 @@ if (!$connection->isTableExists($tableJob)) {
 $tableJobEvent = $installer->getTable('hirale_queue/job_event');
 if (!$connection->isTableExists($tableJobEvent)) {
     $table = $connection->newTable($tableJobEvent)
-        ->addColumn('entity_id', \Maho\Db\Ddl\Table::TYPE_INTEGER, null, [
+        ->addColumn('entity_id', Varien_Db_Ddl_Table::TYPE_INTEGER, null, [
             'unsigned' => true,
             'identity' => true,
             'primary'  => true,
             'nullable' => false,
         ], 'Entity ID')
-        ->addColumn('job_id', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 64, [
+        ->addColumn('job_id', Varien_Db_Ddl_Table::TYPE_VARCHAR, 64, [
             'nullable' => false,
         ], 'Reference to hirale_queue_job.job_id')
-        ->addColumn('from_status', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 32, [
+        ->addColumn('from_status', Varien_Db_Ddl_Table::TYPE_VARCHAR, 32, [
             'nullable' => true,
         ], 'Prior status (NULL for the initial transition)')
-        ->addColumn('to_status', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 32, [
+        ->addColumn('to_status', Varien_Db_Ddl_Table::TYPE_VARCHAR, 32, [
             'nullable' => false,
         ], 'New status')
-        ->addColumn('attempt', \Maho\Db\Ddl\Table::TYPE_INTEGER, null, [
+        ->addColumn('attempt', Varien_Db_Ddl_Table::TYPE_INTEGER, null, [
             'nullable' => false,
             'default'  => 0,
         ], 'Attempt counter at the time of the transition')
-        ->addColumn('error_excerpt', \Maho\Db\Ddl\Table::TYPE_TEXT, 1024, [
+        ->addColumn('error_excerpt', Varien_Db_Ddl_Table::TYPE_TEXT, 1024, [
             'nullable' => true,
         ], 'Failure reason excerpt (1024 char limit)')
-        ->addColumn('occurred_at', \Maho\Db\Ddl\Table::TYPE_DATETIME, null, [
+        ->addColumn('occurred_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => false,
-            'default'  => \Maho\Db\Ddl\Table::TIMESTAMP_INIT,
+            'default'  => Varien_Db_Ddl_Table::TIMESTAMP_INIT,
         ], 'Transition timestamp')
         ->addIndex(
             $installer->getIdxName('hirale_queue/job_event', ['job_id', 'occurred_at']),
@@ -168,57 +168,57 @@ if (!$connection->isTableExists($tableJobEvent)) {
 $tableJobArchive = $installer->getTable('hirale_queue/job_archive');
 if (!$connection->isTableExists($tableJobArchive)) {
     $table = $connection->newTable($tableJobArchive)
-        ->addColumn('entity_id', \Maho\Db\Ddl\Table::TYPE_INTEGER, null, [
+        ->addColumn('entity_id', Varien_Db_Ddl_Table::TYPE_INTEGER, null, [
             'unsigned' => true,
             'identity' => true,
             'primary'  => true,
             'nullable' => false,
         ], 'Entity ID')
-        ->addColumn('job_id', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 64, [
+        ->addColumn('job_id', Varien_Db_Ddl_Table::TYPE_VARCHAR, 64, [
             'nullable' => false,
         ], 'Stable job ID')
-        ->addColumn('queue_name', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 64, [
+        ->addColumn('queue_name', Varien_Db_Ddl_Table::TYPE_VARCHAR, 64, [
             'nullable' => false,
             'default'  => 'default',
         ], 'Logical queue name')
-        ->addColumn('message_class', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 255, [
+        ->addColumn('message_class', Varien_Db_Ddl_Table::TYPE_VARCHAR, 255, [
             'nullable' => false,
         ], 'Symfony Messenger message class FQCN')
-        ->addColumn('status', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 32, [
+        ->addColumn('status', Varien_Db_Ddl_Table::TYPE_VARCHAR, 32, [
             'nullable' => false,
         ], 'Terminal status (succeeded / failed / canceled)')
-        ->addColumn('metadata_json', \Maho\Db\Ddl\Table::TYPE_TEXT, 524288, [
+        ->addColumn('metadata_json', Varien_Db_Ddl_Table::TYPE_TEXT, 524288, [
             'nullable' => true,
         ], 'Preserved metadata')
-        ->addColumn('store_id', \Maho\Db\Ddl\Table::TYPE_SMALLINT, null, [
+        ->addColumn('store_id', Varien_Db_Ddl_Table::TYPE_SMALLINT, null, [
             'unsigned' => true,
             'nullable' => true,
         ], 'Dispatching store ID')
-        ->addColumn('attempt', \Maho\Db\Ddl\Table::TYPE_INTEGER, null, [
+        ->addColumn('attempt', Varien_Db_Ddl_Table::TYPE_INTEGER, null, [
             'nullable' => false,
             'default'  => 0,
         ], 'Final attempt count')
-        ->addColumn('max_attempts', \Maho\Db\Ddl\Table::TYPE_INTEGER, null, [
+        ->addColumn('max_attempts', Varien_Db_Ddl_Table::TYPE_INTEGER, null, [
             'nullable' => false,
             'default'  => 3,
         ], 'Max attempts policy')
-        ->addColumn('last_error', \Maho\Db\Ddl\Table::TYPE_TEXT, 65536, [
+        ->addColumn('last_error', Varien_Db_Ddl_Table::TYPE_TEXT, 65536, [
             'nullable' => true,
         ], 'Terminal failure reason')
-        ->addColumn('created_at', \Maho\Db\Ddl\Table::TYPE_DATETIME, null, [
+        ->addColumn('created_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => false,
         ], 'Original job creation time')
-        ->addColumn('finished_at', \Maho\Db\Ddl\Table::TYPE_DATETIME, null, [
+        ->addColumn('finished_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => false,
         ], 'Job completion time')
-        ->addColumn('archived_at', \Maho\Db\Ddl\Table::TYPE_DATETIME, null, [
+        ->addColumn('archived_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => false,
-            'default'  => \Maho\Db\Ddl\Table::TIMESTAMP_INIT,
+            'default'  => Varien_Db_Ddl_Table::TIMESTAMP_INIT,
         ], 'Archive move time')
         ->addIndex(
-            $installer->getIdxName('hirale_queue/job_archive', ['job_id'], \Maho\Db\Adapter\AdapterInterface::INDEX_TYPE_UNIQUE),
+            $installer->getIdxName('hirale_queue/job_archive', ['job_id'], Varien_Db_Adapter_Interface::INDEX_TYPE_UNIQUE),
             ['job_id'],
-            ['type' => \Maho\Db\Adapter\AdapterInterface::INDEX_TYPE_UNIQUE],
+            ['type' => Varien_Db_Adapter_Interface::INDEX_TYPE_UNIQUE],
         )
         ->addIndex(
             $installer->getIdxName('hirale_queue/job_archive', ['status', 'finished_at']),
@@ -234,31 +234,31 @@ if (!$connection->isTableExists($tableJobArchive)) {
 $tableAudit = $installer->getTable('hirale_queue/audit');
 if (!$connection->isTableExists($tableAudit)) {
     $table = $connection->newTable($tableAudit)
-        ->addColumn('entity_id', \Maho\Db\Ddl\Table::TYPE_INTEGER, null, [
+        ->addColumn('entity_id', Varien_Db_Ddl_Table::TYPE_INTEGER, null, [
             'unsigned' => true,
             'identity' => true,
             'primary'  => true,
             'nullable' => false,
         ], 'Entity ID')
-        ->addColumn('admin_user_id', \Maho\Db\Ddl\Table::TYPE_INTEGER, null, [
+        ->addColumn('admin_user_id', Varien_Db_Ddl_Table::TYPE_INTEGER, null, [
             'unsigned' => true,
             'nullable' => true,
         ], 'Admin user ID')
-        ->addColumn('admin_username', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 64, [
+        ->addColumn('admin_username', Varien_Db_Ddl_Table::TYPE_VARCHAR, 64, [
             'nullable' => true,
         ], 'Admin username (preserved if admin user is later deleted)')
-        ->addColumn('action', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 32, [
+        ->addColumn('action', Varien_Db_Ddl_Table::TYPE_VARCHAR, 32, [
             'nullable' => false,
         ], 'retry / cancel / purge / test_connection')
-        ->addColumn('job_id', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 64, [
+        ->addColumn('job_id', Varien_Db_Ddl_Table::TYPE_VARCHAR, 64, [
             'nullable' => true,
         ], 'Targeted job (NULL for bulk ops)')
-        ->addColumn('ip', \Maho\Db\Ddl\Table::TYPE_VARCHAR, 45, [
+        ->addColumn('ip', Varien_Db_Ddl_Table::TYPE_VARCHAR, 45, [
             'nullable' => true,
         ], 'Client IP address')
-        ->addColumn('created_at', \Maho\Db\Ddl\Table::TYPE_DATETIME, null, [
+        ->addColumn('created_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => false,
-            'default'  => \Maho\Db\Ddl\Table::TIMESTAMP_INIT,
+            'default'  => Varien_Db_Ddl_Table::TIMESTAMP_INIT,
         ], 'Action timestamp')
         ->addIndex(
             $installer->getIdxName('hirale_queue/audit', ['action', 'created_at']),

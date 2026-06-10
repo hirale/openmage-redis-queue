@@ -25,7 +25,9 @@ class Hirale_Queue_Model_Source_Backend
 
         foreach ($options as $k => $option) {
             $package = Hirale_Queue_Model_ConnectionTester::REQUIRED_PACKAGES[$option['value']] ?? null;
-            if ($package !== null) {
+            // packageInstallWarning is Maho-only; OpenMage admins simply get
+            // no inline hint (save-time validation still reports the gap).
+            if ($package !== null && method_exists($helper, 'packageInstallWarning')) {
                 $options[$k]['label'] .= $helper->packageInstallWarning($package);
             }
         }

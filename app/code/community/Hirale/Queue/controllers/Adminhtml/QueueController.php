@@ -187,7 +187,7 @@ class Hirale_Queue_Adminhtml_QueueController extends Mage_Adminhtml_Controller_A
     private function testConnectionFromForm(array $groups): void
     {
         if (!$this->_validateFormKey()) {
-            $this->getResponse()->setBodyJson([
+            Hirale_Queue_Model_Compat::jsonResponse($this->getResponse(), [
                 'success' => false,
                 'message' => $this->__('Invalid form key. Reload the page and try again.'),
             ]);
@@ -201,12 +201,12 @@ class Hirale_Queue_Adminhtml_QueueController extends Mage_Adminhtml_Controller_A
             (new TransportDsnBuilder())->build($config, $queues[0]);
             $tester->probe($config, true);
             $this->audit()->record(Hirale_Queue_Model_Audit::ACTION_TEST_CONNECTION);
-            $this->getResponse()->setBodyJson([
+            Hirale_Queue_Model_Compat::jsonResponse($this->getResponse(), [
                 'success' => true,
                 'message' => $this->__('Connected to the %s backend (queue "%s").', (string) $config['type'], $queues[0]),
             ]);
         } catch (\Throwable $e) {
-            $this->getResponse()->setBodyJson([
+            Hirale_Queue_Model_Compat::jsonResponse($this->getResponse(), [
                 'success' => false,
                 'message' => $e->getMessage(),
             ]);

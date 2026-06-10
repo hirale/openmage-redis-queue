@@ -63,11 +63,11 @@ final class HiraleQueueTest extends Command
         });
 
         $worker = new Worker($receivers, MessageBusFactory::getBus(), $dispatcher);
+        WorkerListeners::registerSignalHandlers($worker);
         $worker->run([
             'sleep'      => 200_000,
             'queues'     => null,
-            'signals'    => true,
-            'time-limit' => $timeout,
+            'time_limit' => $timeout,
         ]);
 
         /** @var \Hirale_Queue_Model_JobRepository $repo */

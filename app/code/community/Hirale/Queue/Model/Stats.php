@@ -17,7 +17,7 @@ class Hirale_Queue_Model_Stats
         $conn = $this->readAdapter();
         $rows = $conn->fetchAll(
             $conn->select()
-                ->from($this->jobTable(), ['status', 'cnt' => new Maho\Db\Expr('COUNT(*)')])
+                ->from($this->jobTable(), ['status', 'cnt' => Hirale_Queue_Model_Compat::expr('COUNT(*)')])
                 ->group('status'),
         );
         $totals = array_fill_keys(array_keys(Hirale_Queue_Model_Job::statuses()), 0);
@@ -42,8 +42,8 @@ class Hirale_Queue_Model_Stats
                     $this->jobTable(),
                     [
                         'queue'    => 'queue_name',
-                        'depth'    => new Maho\Db\Expr('COUNT(*)'),
-                        'oldest'   => new Maho\Db\Expr('MIN(created_at)'),
+                        'depth'    => Hirale_Queue_Model_Compat::expr('COUNT(*)'),
+                        'oldest'   => Hirale_Queue_Model_Compat::expr('MIN(created_at)'),
                     ],
                 )
                 ->where('status IN(?)', [
@@ -77,7 +77,7 @@ class Hirale_Queue_Model_Stats
         $conn = $this->readAdapter();
         $oldest = $conn->fetchOne(
             $conn->select()
-                ->from($this->jobTable(), ['oldest' => new Maho\Db\Expr('MIN(created_at)')])
+                ->from($this->jobTable(), ['oldest' => Hirale_Queue_Model_Compat::expr('MIN(created_at)')])
                 ->where('status IN(?)', [
                     Hirale_Queue_Model_Job::STATUS_QUEUED,
                     Hirale_Queue_Model_Job::STATUS_RETRY_WAIT,
@@ -90,7 +90,7 @@ class Hirale_Queue_Model_Stats
         return max(0, time() - (int) strtotime((string) $oldest));
     }
 
-    protected function readAdapter(): \Maho\Db\Adapter\AdapterInterface
+    protected function readAdapter(): Varien_Db_Adapter_Interface
     {
         return Mage::getSingleton('core/resource')->getConnection('hirale_queue_read');
     }

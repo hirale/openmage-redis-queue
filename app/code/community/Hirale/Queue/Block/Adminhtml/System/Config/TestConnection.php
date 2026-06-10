@@ -14,14 +14,14 @@
 class Hirale_Queue_Block_Adminhtml_System_Config_TestConnection extends Mage_Adminhtml_Block_System_Config_Form_Field
 {
     #[\Override]
-    public function render(\Maho\Data\Form\Element\AbstractElement $element)
+    public function render(Varien_Data_Form_Element_Abstract $element)
     {
         $element->unsScope()->unsCanUseWebsiteValue()->unsCanUseDefaultValue();
         return parent::render($element);
     }
 
     #[\Override]
-    protected function _getElementHtml(\Maho\Data\Form\Element\AbstractElement $element)
+    protected function _getElementHtml(Varien_Data_Form_Element_Abstract $element)
     {
         $helper       = Mage::helper('hirale_queue');
         $buttonLabel  = $this->escapeHtml($helper->__('Test Connection'));
@@ -71,7 +71,8 @@ class Hirale_Queue_Block_Adminhtml_System_Config_TestConnection extends Mage_Adm
             }
         });
 
-        mahoFetch('{$ajaxUrl}', { method: 'POST', body: formData })
+        fetch('{$ajaxUrl}', { method: 'POST', body: formData, credentials: 'same-origin' })
+            .then((r) => r.json())
             .then((response) => {
                 result.textContent = response.message;
                 result.className = response.success ? 'success' : 'error';

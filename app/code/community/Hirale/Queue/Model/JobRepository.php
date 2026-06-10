@@ -27,7 +27,7 @@ class Hirale_Queue_Model_JobRepository
         int $delaySeconds = 0,
     ): string {
         $jobId = $this->generateJobId();
-        $now   = Mage_Core_Model_Locale::nowUtc();
+        $now   = gmdate('Y-m-d H:i:s');
         $available = $delaySeconds > 0
             ? gmdate('Y-m-d H:i:s', time() + $delaySeconds)
             : $now;
@@ -94,7 +94,7 @@ class Hirale_Queue_Model_JobRepository
     {
         $this->writeAdapter()->update(
             $this->jobTable(),
-            ['transport_id' => $transportId, 'dispatched_at' => Mage_Core_Model_Locale::nowUtc()],
+            ['transport_id' => $transportId, 'dispatched_at' => gmdate('Y-m-d H:i:s')],
             ['job_id = ?' => $jobId],
         );
     }
@@ -116,10 +116,10 @@ class Hirale_Queue_Model_JobRepository
 
         $update = array_merge($extra, [
             'status'     => $toStatus,
-            'updated_at' => Mage_Core_Model_Locale::nowUtc(),
+            'updated_at' => gmdate('Y-m-d H:i:s'),
         ]);
         if (Hirale_Queue_Model_Job::isTerminal($toStatus) && !isset($extra['finished_at'])) {
-            $update['finished_at'] = Mage_Core_Model_Locale::nowUtc();
+            $update['finished_at'] = gmdate('Y-m-d H:i:s');
         }
 
         $this->writeAdapter()->update($this->jobTable(), $update, ['job_id = ?' => $jobId]);
@@ -131,7 +131,7 @@ class Hirale_Queue_Model_JobRepository
         $conn = $this->writeAdapter();
         $conn->update(
             $this->jobTable(),
-            ['attempt' => new Maho\Db\Expr('attempt + 1'), 'updated_at' => Mage_Core_Model_Locale::nowUtc()],
+            ['attempt' => Hirale_Queue_Model_Compat::expr('attempt + 1'), 'updated_at' => gmdate('Y-m-d H:i:s')],
             ['job_id = ?' => $jobId],
         );
         return (int) $conn->fetchOne(
@@ -143,7 +143,7 @@ class Hirale_Queue_Model_JobRepository
     {
         $this->writeAdapter()->update(
             $this->jobTable(),
-            ['last_error' => mb_substr($error, 0, 65000), 'updated_at' => Mage_Core_Model_Locale::nowUtc()],
+            ['last_error' => mb_substr($error, 0, 65000), 'updated_at' => gmdate('Y-m-d H:i:s')],
             ['job_id = ?' => $jobId],
         );
     }
@@ -182,7 +182,7 @@ class Hirale_Queue_Model_JobRepository
             $this->jobTable(),
             [
                 'status'     => Hirale_Queue_Model_Job::STATUS_CANCELED,
-                'updated_at' => Mage_Core_Model_Locale::nowUtc(),
+                'updated_at' => gmdate('Y-m-d H:i:s'),
             ],
             ['job_id = ?' => $jobId, 'status = ?' => Hirale_Queue_Model_Job::STATUS_FAILED],
         );
@@ -204,7 +204,7 @@ class Hirale_Queue_Model_JobRepository
         // Cooperative cancel: flag is honored by the handler at a safe boundary.
         return (int) $this->writeAdapter()->update(
             $this->jobTable(),
-            ['cancel_requested' => 1, 'updated_at' => Mage_Core_Model_Locale::nowUtc()],
+            ['cancel_requested' => 1, 'updated_at' => gmdate('Y-m-d H:i:s')],
             ['job_id = ?' => $jobId, 'status = ?' => Hirale_Queue_Model_Job::STATUS_RUNNING],
         );
     }
@@ -216,8 +216,8 @@ class Hirale_Queue_Model_JobRepository
             $this->jobTable(),
             [
                 'status'      => Hirale_Queue_Model_Job::STATUS_CANCELED,
-                'updated_at'  => Mage_Core_Model_Locale::nowUtc(),
-                'finished_at' => Mage_Core_Model_Locale::nowUtc(),
+                'updated_at'  => gmdate('Y-m-d H:i:s'),
+                'finished_at' => gmdate('Y-m-d H:i:s'),
             ],
             [
                 'job_id = ?'   => $jobId,
@@ -259,7 +259,7 @@ class Hirale_Queue_Model_JobRepository
             return 0;
         }
 
-        $now = Mage_Core_Model_Locale::nowUtc();
+        $now = gmdate('Y-m-d H:i:s');
         $moved = 0;
         $conn->beginTransaction();
         try {
@@ -326,7 +326,7 @@ class Hirale_Queue_Model_JobRepository
             'to_status'     => $toStatus,
             'attempt'       => $attempt,
             'error_excerpt' => $errorExcerpt === null ? null : mb_substr($errorExcerpt, 0, 1024),
-            'occurred_at'   => Mage_Core_Model_Locale::nowUtc(),
+            'occurred_at'   => gmdate('Y-m-d H:i:s'),
         ]);
     }
 
@@ -336,12 +336,12 @@ class Hirale_Queue_Model_JobRepository
         return bin2hex(random_bytes(16));
     }
 
-    protected function readAdapter(): \Maho\Db\Adapter\AdapterInterface
+    protected function readAdapter(): Varien_Db_Adapter_Interface
     {
         return Mage::getSingleton('core/resource')->getConnection('hirale_queue_read');
     }
 
-    protected function writeAdapter(): \Maho\Db\Adapter\AdapterInterface
+    protected function writeAdapter(): Varien_Db_Adapter_Interface
     {
         return Mage::getSingleton('core/resource')->getConnection('hirale_queue_write');
     }

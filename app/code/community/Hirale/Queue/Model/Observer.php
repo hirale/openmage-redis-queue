@@ -23,7 +23,7 @@ use Hirale\Queue\TransportDsnBuilder;
  */
 class Hirale_Queue_Model_Observer
 {
-    public function validateConfigOnSave(\Maho\Event\Observer $observer): void
+    public function validateConfigOnSave(Varien_Event_Observer $observer): void
     {
         $request = Mage::app()->getRequest();
         $section = (string) $request->getParam('section');
@@ -68,7 +68,7 @@ class Hirale_Queue_Model_Observer
         }
     }
 
-    public function clearBusCache(\Maho\Event\Observer $observer): void
+    public function clearBusCache(Varien_Event_Observer $observer): void
     {
         MessageBusFactory::reset();
     }

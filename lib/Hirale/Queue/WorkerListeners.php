@@ -10,8 +10,11 @@ use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\Event\WorkerMessageHandledEvent;
 use Symfony\Component\Messenger\Event\WorkerMessageReceivedEvent;
+use Symfony\Component\Messenger\EventListener\StopWorkerOnMemoryLimitListener;
+use Symfony\Component\Messenger\EventListener\StopWorkerOnMessageLimitListener;
 use Symfony\Component\Messenger\Stamp\DelayStamp;
 use Symfony\Component\Messenger\Stamp\RedeliveryStamp;
+use Symfony\Component\Messenger\Worker;
 
 /**
  * Worker event listeners that flip hirale_queue_job state on the envelope's
@@ -33,6 +36,42 @@ final class WorkerListeners
         self::attachRetry($dispatcher, $retryStrategy, $receivers);
     }
 
+    /**
+     * Stop conditions via Messenger's shipped listeners. The time limit is
+     * NOT handled here — pass it as Worker::run(['time_limit' => N]); Worker
+     * supports only `sleep`, `time_limit`, and `queues` run options and
+     * silently ignores anything else.
+     */
+    public static function attachStopConditions(
+        EventDispatcher $dispatcher,
+        ?int $messageLimit = null,
+        ?int $memoryLimitBytes = null,
+    ): void {
+        if ($messageLimit !== null && $messageLimit > 0) {
+            $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener($messageLimit));
+        }
+        if ($memoryLimitBytes !== null && $memoryLimitBytes > 0) {
+            $dispatcher->addSubscriber(new StopWorkerOnMemoryLimitListener($memoryLimitBytes));
+        }
+    }
+
+    /**
+     * Graceful SIGTERM/SIGINT shutdown: the worker finishes the in-flight
+     * message and exits. No-op when ext-pcntl is unavailable.
+     */
+    public static function registerSignalHandlers(Worker $worker): void
+    {
+        if (!\function_exists('pcntl_signal')) {
+            return;
+        }
+        pcntl_async_signals(true);
+        foreach ([SIGTERM, SIGINT] as $signal) {
+            pcntl_signal($signal, static function () use ($worker): void {
+                $worker->stop();
+            });
+        }
+    }
+
     private static function attachStateTransitions(EventDispatcher $dispatcher): void
     {
         $jobRepo = self::jobRepository();
@@ -43,7 +82,7 @@ final class WorkerListeners
                 return;
             }
             $jobRepo->transition($stamp->jobId, \Hirale_Queue_Model_Job::STATUS_RUNNING, [
-                'started_at' => \Mage_Core_Model_Locale::nowUtc(),
+                'started_at' => \gmdate('Y-m-d H:i:s'),
             ]);
         });
 

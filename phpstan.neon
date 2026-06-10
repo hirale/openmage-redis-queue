@@ -3,5 +3,18 @@ parameters:
     paths:
         - lib
         - tests
+    # Symbol discovery only (not analyzed): the platform is a dev dependency
+    # and our own Magento-style classes are not autoloadable standalone.
+    scanFiles:
+        - vendor/mahocommerce/maho/app/Mage.php
+        - vendor/mahocommerce/maho/app/code/core/Mage/Core/Helper/Abstract.php
+        - vendor/mahocommerce/maho/app/code/core/Mage/Core/Model/Abstract.php
+        - vendor/mahocommerce/maho/app/code/core/Mage/Core/Model/App.php
+        - vendor/mahocommerce/maho/app/code/core/Mage/Core/Model/Config.php
+        - vendor/mahocommerce/maho/app/code/core/Mage/Core/Model/Store.php
+        - vendor/mahocommerce/maho/app/code/core/Mage/Core/Model/Config/Element.php
+        - vendor/mahocommerce/maho/lib/Maho/Simplexml/Element.php
+    scanDirectories:
+        - app/code/community/Hirale/Queue
     treatPhpDocTypesAsCertain: false
     reportUnmatchedIgnoredErrors: false

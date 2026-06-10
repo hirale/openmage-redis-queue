@@ -1,23 +1,21 @@
 {
     "name": "hirale/queue",
-    "type": "maho-module",
+    "type": "magento-module",
     "license": "OSL-3.0",
-    "description": "A queue module for Maho, built on Symfony Messenger. Backend-agnostic (Redis, Doctrine, AMQP, SQS).",
+    "description": "A queue module for OpenMage and Maho, built on Symfony Messenger. Backend-agnostic (Redis Streams in v3.0).",
     "keywords": [
         "maho",
-        "mahoecommerce",
+        "mahocommerce",
+        "openmage",
+        "magento1",
         "queue",
         "messenger",
-        "redis",
-        "amqp",
-        "doctrine",
-        "sqs"
+        "redis"
     ],
     "require": {
         "php": ">=8.3",
         "ext-json": "*",
         "ext-redis": "*",
-        "mahocommerce/maho": "^26.5",
         "symfony/messenger": "^7.4",
         "symfony/serializer": "^7.4",
         "symfony/redis-messenger": "^7.4",
@@ -26,13 +24,16 @@
     "require-dev": {
         "phpunit/phpunit": "^10.5",
         "phpstan/phpstan": "^2.0",
-        "friendsofphp/php-cs-fixer": "^3.50"
+        "friendsofphp/php-cs-fixer": "^3.50",
+        "mahocommerce/maho": "^26.5"
     },
     "suggest": {
-        "symfony/doctrine-messenger": "^7.4 — required for the Doctrine (database) backend",
-        "symfony/amqp-messenger": "^7.4 — required for the AMQP/RabbitMQ backend",
-        "symfony/amazon-sqs-messenger": "^7.4 — required for the Amazon SQS backend",
-        "symfony/beanstalkd-messenger": "^7.4 — required for the Beanstalkd backend"
+        "symfony/doctrine-messenger": "^7.4 \u2014 required for the Doctrine (database) backend",
+        "symfony/amqp-messenger": "^7.4 \u2014 required for the AMQP/RabbitMQ backend",
+        "symfony/amazon-sqs-messenger": "^7.4 \u2014 required for the Amazon SQS backend",
+        "symfony/beanstalkd-messenger": "^7.4 \u2014 required for the Beanstalkd backend",
+        "mahocommerce/maho": "^26.5 \u2014 the Maho platform (alternatively openmage/magento-lts >=20.17)",
+        "cotya/magento-composer-installer": "Applies extra.map into the OpenMage project (Maho needs no installer plugin)"
     },
     "config": {
         "allow-plugins": {
@@ -51,7 +52,40 @@
         }
     },
     "extra": {
-        "maho-module-dir": "app/code/community/Hirale/Queue"
+        "map": [
+            [
+                "app/etc/modules/Hirale_Queue.xml",
+                "app/etc/modules/Hirale_Queue.xml"
+            ],
+            [
+                "app/code/community/Hirale/Queue",
+                "app/code/community/Hirale/Queue"
+            ],
+            [
+                "app/design/adminhtml/default/default/template/hirale",
+                "app/design/adminhtml/default/default/template/hirale"
+            ],
+            [
+                "shell/hirale_queue_worker.php",
+                "shell/hirale_queue_worker.php"
+            ],
+            [
+                "shell/hirale_queue_test.php",
+                "shell/hirale_queue_test.php"
+            ],
+            [
+                "shell/hirale_queue_stats.php",
+                "shell/hirale_queue_stats.php"
+            ],
+            [
+                "shell/hirale_queue_health.php",
+                "shell/hirale_queue_health.php"
+            ],
+            [
+                "shell/hirale_queue_retry_failed.php",
+                "shell/hirale_queue_retry_failed.php"
+            ]
+        ]
     },
     "scripts": {
         "test": "phpunit",
@@ -63,5 +97,9 @@
         {
             "name": "Hirale"
         }
-    ]
+    ],
+    "conflict": {
+        "mahocommerce/maho": "<26.5",
+        "openmage/magento-lts": "<20.17"
+    }
 }

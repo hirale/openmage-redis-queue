@@ -63,6 +63,13 @@ final class HiraleQueueConsume extends Command
         $dispatcher = new EventDispatcher();
 
         WorkerListeners::attach($dispatcher, MessageBusFactory::getRetryStrategy(), $receivers);
+        WorkerListeners::attachStopConditions(
+            $dispatcher,
+            messageLimit: (int) $input->getOption('limit'),
+            memoryLimitBytes: $input->getOption('memory-limit') !== null
+                ? (int) $input->getOption('memory-limit') * 1024 * 1024
+                : null,
+        );
 
         $output->writeln(sprintf(
             '<info>hirale:queue:consume</info> consuming from [%s]',
@@ -70,15 +77,12 @@ final class HiraleQueueConsume extends Command
         ));
 
         $worker = new Worker($receivers, $bus, $dispatcher);
+        WorkerListeners::registerSignalHandlers($worker);
+        // Worker::run() supports only sleep / time_limit / queues.
         $worker->run([
-            'sleep'        => (int) $input->getOption('sleep') * 1_000_000,
-            'queues'       => null,
-            'signals'      => true,
-            'memory-limit' => $input->getOption('memory-limit') !== null
-                ? (int) $input->getOption('memory-limit') * 1024 * 1024
-                : null,
-            'time-limit'   => (int) $input->getOption('time-limit'),
-            'limit'        => (int) $input->getOption('limit'),
+            'sleep'      => (int) $input->getOption('sleep') * 1_000_000,
+            'queues'     => null,
+            'time_limit' => (int) $input->getOption('time-limit'),
         ]);
 
         return Command::SUCCESS;

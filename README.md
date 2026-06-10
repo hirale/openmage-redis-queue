@@ -1,26 +1,28 @@
 # Hirale Queue
 
-A queue module for **Maho**, built on Symfony Messenger. Backend-agnostic by design: Redis Streams ships in v3.0, with Doctrine / AMQP / SQS as drop-in transports later.
+A queue module for **OpenMage and Maho**, built on Symfony Messenger. Backend-agnostic by design: Redis Streams ships in v3.0, with Doctrine / AMQP / SQS as drop-in transports later.
 
 ## Which version do I need?
 
-| Your platform | Package | Constraint | Branch |
-| --- | --- | --- | --- |
-| **Maho** 26.5+ | `hirale/queue` | `^3.0` | `master` |
-| **OpenMage** | `hirale/openmage-redis-queue` | `^1.0` | [`openmage`](../../tree/openmage) |
+| Your platform | Package | Constraint |
+| --- | --- | --- |
+| **Maho** 26.5+ | `hirale/queue` | `^3.0` |
+| **OpenMage** 20.17+ (PHP 8.3+) | `hirale/queue` | `^3.0` |
+| Older OpenMage / legacy installs | `hirale/openmage-redis-queue` | `^1.0` (frozen, fixes only) |
 
-The two lines share no API, schema, or config:
+One codebase serves both platforms: the module uses OpenMage-era class
+names that Maho aliases natively, and the only platform difference you
+will notice is the worker entry point (Maho CLI vs `shell/` scripts).
 
-- **v3 (`hirale/queue`) is Maho-only** and is where development happens. It will not install or run on OpenMage.
-- **v1.x is the OpenMage line**, maintained on the `openmage` branch with fixes only. Existing OpenMage projects should stay pinned to `hirale/openmage-redis-queue: ^1.0`.
-
-> v3 was previously published as `hirale/openmage-redis-queue`; the rename to `hirale/queue` reflects the platform split.
+> v3 was previously published as `hirale/openmage-redis-queue`; the rename
+> to `hirale/queue` reflects the rewrite. Upgrading a v1 install is a
+> breaking change — see *Migrating from v1.x* below.
 
 ## What's new in v3
 
 - **Symfony Messenger as the bus.** v2's custom `Worker` / `Backoff` / `DeadLetter` / `HandlerRegistry` / `QueueRouter` are gone. v3 plugs into Messenger's middleware pipeline, retry strategy interface, and transport abstraction.
 - **Backend-agnostic.** Admin picks Redis / Doctrine / AMQP / SQS from a dropdown; the module assembles the DSN. v3.0 ships Redis; the other transports are wired in v3.x as `composer require symfony/<backend>-messenger` adds the needed factory.
-- **Maho-native.** `type=maho-module` with a `mahocommerce/maho ^26.5` hard require. PHP 8.3+.
+- **Dual-platform.** One codebase for OpenMage 20.17+ and Maho 26.5+ (PHP 8.3+); composer conflicts reject older platforms with a clear error.
 - **Producer API is typed.** Downstream code dispatches typed message classes:
   ```php
   use Hirale\Queue\Bus;
@@ -32,7 +34,7 @@ The two lines share no API, schema, or config:
 
 ## Requirements
 
-- Maho 26.5+
+- Maho 26.5+ **or** OpenMage 20.17+
 - PHP 8.3+
 - ext-json, ext-redis (for the Redis backend)
 - A Redis server reachable from the workers (TCP or Unix socket)
@@ -43,11 +45,10 @@ The two lines share no API, schema, or config:
 composer require hirale/queue
 ```
 
-Run Maho's setup to create the four queue tables (`hirale_queue_job`, `hirale_queue_job_event`, `hirale_queue_job_archive`, `hirale_queue_audit`):
+Create the four queue tables (`hirale_queue_job`, `hirale_queue_job_event`, `hirale_queue_job_archive`, `hirale_queue_audit`):
 
-```bash
-./maho migrate
-```
+- **Maho**: `./maho migrate`
+- **OpenMage**: setup scripts run on the next request, as usual
 
 ## Configure
 
@@ -133,13 +134,19 @@ Unmapped messages route to the `default` queue.
 
 ## Consumer
 
-Long-running worker:
+Long-running worker — Maho:
 
 ```bash
 ./maho hirale:queue:consume default
 ```
 
-With options:
+OpenMage (same engine, shell entry point):
+
+```bash
+php shell/hirale_queue_worker.php --queues default
+```
+
+With options (Maho shown; the shell worker takes the same options as `--queues a,b --time-limit ... --limit ... --sleep ... --memory-limit ...`):
 
 ```bash
 ./maho hirale:queue:consume default full_reindex \
@@ -217,14 +224,26 @@ A **Test Connection** button also sits below the backend fields in *System → C
 
 All admin actions are recorded in `hirale_queue_audit` when audit logging is enabled; audit rows are purged by the nightly cron after `audit_retention_days` (default 90).
 
-## Migrating from v1.x (OpenMage)
+## Migrating from v1.x
 
-The v1.x line continues on the `openmage` branch for OpenMage installs. v3 is **Maho-only** and intentionally breaks API compatibility:
+v3 intentionally breaks API compatibility with the v1 line
+(`hirale/openmage-redis-queue ^1.0`):
 
 - v1.x producer: `Mage::getModel('hirale_queue/task')->addTask($handler, $data, ...)`
 - v3 producer: `\Hirale\Queue\Bus::dispatch(new YourMessage(...))`
 
-The handler interface, payload format, DB schema, and config paths all changed. There is no automated upgrade from v1 to v3: moving a store from OpenMage to Maho means migrating each queue consumer to typed messages and `__invoke` handlers (see *Producer API* and *Handler registration* above).
+The handler interface, payload format, DB schema, and config paths all
+changed. Upgrading an existing OpenMage install:
+
+1. `composer remove hirale/openmage-redis-queue && composer require hirale/queue`
+2. Setup scripts create the v3 tables automatically (v1 tables are left
+   untouched; drop them once you no longer need the history).
+3. Reconfigure the backend once under **System → Configuration → Hirale →
+   Queue** (config paths changed; save-time validation checks the connection).
+4. Migrate every producer and handler to typed messages and `__invoke`
+   handlers (see *Producer API* and *Handler registration* above), or update
+   the consuming modules to their v3-compatible releases.
+5. Run the self-test: `php shell/hirale_queue_test.php`.
 
 ## Development
 
