@@ -1,11 +1,12 @@
 # Hirale Redis Queue Module
 
 > [!NOTE]
-> **This is the OpenMage maintenance branch (v1.x).** It tracks the
-> `hirale/openmage-redis-queue` package for OpenMage / legacy Magento 1
-> installs and receives fixes only. Active development moved to v3+
-> (`hirale/queue`), which is **Maho-only** and lives on `master`.
-> Pin OpenMage projects to `hirale/openmage-redis-queue: ^1.0`.
+> **This is the v1.x maintenance branch.** It tracks the
+> `hirale/openmage-redis-queue` package for legacy installs and receives
+> fixes only. Active development moved to v3+ (`hirale/queue`) on
+> `master`, which supports **both OpenMage 20.17+ and Maho 26.5+**
+> (PHP 8.3+). Keep legacy projects on `hirale/openmage-redis-queue: ^1.0`;
+> use `hirale/queue: ^3.0` everywhere else.
 
 A module using Redis Stream to process asynchronous tasks.
 
