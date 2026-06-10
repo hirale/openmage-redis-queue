@@ -16,9 +16,9 @@
         "php": ">=8.3",
         "ext-json": "*",
         "ext-redis": "*",
-        "symfony/messenger": "^7.4",
-        "symfony/serializer": "^7.4",
-        "symfony/redis-messenger": "^7.4",
+        "symfony/messenger": "^7.4 || ^8.0",
+        "symfony/serializer": "^7.4 || ^8.0",
+        "symfony/redis-messenger": "^7.4 || ^8.0",
         "monolog/monolog": "^3.9"
     },
     "require-dev": {
@@ -28,11 +28,11 @@
         "mahocommerce/maho": "^26.5"
     },
     "suggest": {
-        "symfony/doctrine-messenger": "^7.4 \u2014 required for the Doctrine (database) backend",
-        "symfony/amqp-messenger": "^7.4 \u2014 required for the AMQP/RabbitMQ backend",
-        "symfony/amazon-sqs-messenger": "^7.4 \u2014 required for the Amazon SQS backend",
-        "symfony/beanstalkd-messenger": "^7.4 \u2014 required for the Beanstalkd backend",
-        "mahocommerce/maho": "^26.5 \u2014 the Maho platform (alternatively openmage/magento-lts >=20.17)",
+        "symfony/doctrine-messenger": "^7.4 || ^8.0 — required for the Doctrine (database) backend",
+        "symfony/amqp-messenger": "^7.4 || ^8.0 — required for the AMQP/RabbitMQ backend",
+        "symfony/amazon-sqs-messenger": "^7.4 || ^8.0 — required for the Amazon SQS backend",
+        "symfony/beanstalkd-messenger": "^7.4 || ^8.0 — required for the Beanstalkd backend",
+        "mahocommerce/maho": "^26.5 — the Maho platform (alternatively openmage/magento-lts >=20.17)",
         "magento-hackathon/magento-composer-installer": "Deploys extra.map into the OpenMage project (resolves at 1.3.2; see README — Maho needs no installer plugin)"
     },
     "config": {
