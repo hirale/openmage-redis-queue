@@ -47,25 +47,31 @@ composer require hirale/queue
 
 ### OpenMage: one-time composer adjustments
 
-Stock OpenMage pins `magento-hackathon/magento-composer-installer` to
-`^3.1 || ^2.1 || ^4.0`. Those versions require `symfony/console ≤5`,
-which cannot coexist with Symfony Messenger 7.x. Version 1.3.2 has no
-console requirement and deploys `extra.map` modules fine under
-Composer 2 (it prints a "legacy composer-installer" warning, which is
-harmless). OpenMage also locks dependency resolution to PHP 8.1 via
+Two stock-OpenMage facts need one-time tweaks. The pinned
+`magento-hackathon/magento-composer-installer` cannot serve a project
+that uses Symfony Messenger: its 3.x/4.x releases require
+`symfony/console ≤5` (Messenger 7/8 conflicts with `console <7.2`),
+and its only console-free release (1.3.2) is a Composer 1 plugin that
+deploys while Composer 2 is still extracting archives, aborting every
+dist install. OpenMage also locks dependency resolution to PHP 8.1 via
 `config.platform`, which would reject this package's PHP 8.3 floor.
 
-In your project root, before requiring the package:
+In your project root:
 
 ```bash
-composer remove --no-update magento-hackathon/magento-composer-installer
 composer config platform.php 8.3
-composer require hirale/queue
+composer config allow-plugins.hirale/magento-module-installer true
+composer require hirale/magento-module-installer hirale/queue
 ```
 
-The installer comes back transitively at 1.3.2 (other OpenMage
-packages require it as `*`) and copies the module into `app/`,
-including the five `shell/hirale_queue_*.php` entry points.
+[`hirale/magento-module-installer`](https://github.com/hirale/magento-module-installer)
+is a zero-dependency Composer 2 plugin that deploys `extra.map` and
+modman modules *after* extraction completes. It `replace`s the legacy
+installer, so the stock root requirement keeps resolving — nothing to
+remove — and existing modman-based packages (openmage_ignition, the
+Cm redis modules, …) keep deploying. It copies this module into
+`app/`, including the five `shell/hirale_queue_*.php` entry points;
+`composer magento-module-deploy` re-deploys everything idempotently.
 
 Create the four queue tables (`hirale_queue_job`, `hirale_queue_job_event`, `hirale_queue_job_archive`, `hirale_queue_audit`):
 
