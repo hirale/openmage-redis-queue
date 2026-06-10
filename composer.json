@@ -33,7 +33,7 @@
         "symfony/amazon-sqs-messenger": "^7.4 \u2014 required for the Amazon SQS backend",
         "symfony/beanstalkd-messenger": "^7.4 \u2014 required for the Beanstalkd backend",
         "mahocommerce/maho": "^26.5 \u2014 the Maho platform (alternatively openmage/magento-lts >=20.17)",
-        "cotya/magento-composer-installer": "Applies extra.map into the OpenMage project (Maho needs no installer plugin)"
+        "magento-hackathon/magento-composer-installer": "Deploys extra.map into the OpenMage project (resolves at 1.3.2; see README — Maho needs no installer plugin)"
     },
     "config": {
         "allow-plugins": {
