@@ -1,158 +1,169 @@
-# Hirale Redis Queue Module
+# Hirale Queue
 
-A community-scope queue module for OpenMage and Maho. Version 2.x uses Redis
-Streams for worker delivery and a database-backed job index for observability,
-manual recovery, and audit history.
+A queue module for **Maho**, built on Symfony Messenger. Backend-agnostic by design: Redis Streams ships in v3.0, with Doctrine / AMQP / SQS as drop-in transports later.
 
-## Modules that depend on this module
+## Which version do I need?
 
-| Module | URL |
-| --- | --- |
-| Google Analytics 4 Measurement Protocol | [openmage-ga4-measurement](https://github.com/hirale/openmage-ga4-measurement) |
-| Meta Conversions API | [openmage-meta-conversions](https://github.com/hirale/openmage-meta-conversions) |
+| Your platform | Package | Constraint | Branch |
+| --- | --- | --- | --- |
+| **Maho** 26.5+ | `hirale/queue` | `^3.0` | `master` |
+| **OpenMage** | `hirale/openmage-redis-queue` | `^1.0` | [`openmage`](../../tree/openmage) |
+
+The two lines share no API, schema, or config:
+
+- **v3 (`hirale/queue`) is Maho-only** and is where development happens. It will not install or run on OpenMage.
+- **v1.x is the OpenMage line**, maintained on the `openmage` branch with fixes only. Existing OpenMage projects should stay pinned to `hirale/openmage-redis-queue: ^1.0`.
+
+> v3 was previously published as `hirale/openmage-redis-queue`; the rename to `hirale/queue` reflects the platform split.
+
+## What's new in v3
+
+- **Symfony Messenger as the bus.** v2's custom `Worker` / `Backoff` / `DeadLetter` / `HandlerRegistry` / `QueueRouter` are gone. v3 plugs into Messenger's middleware pipeline, retry strategy interface, and transport abstraction.
+- **Backend-agnostic.** Admin picks Redis / Doctrine / AMQP / SQS from a dropdown; the module assembles the DSN. v3.0 ships Redis; the other transports are wired in v3.x as `composer require symfony/<backend>-messenger` adds the needed factory.
+- **Maho-native.** `type=maho-module` with a `mahocommerce/maho ^26.5` hard require. PHP 8.3+.
+- **Producer API is typed.** Downstream code dispatches typed message classes:
+  ```php
+  use Hirale\Queue\Bus;
+  Bus::dispatch(new DrainEventsMessage(reason: 'index_events'));
+  ```
+  Handlers implement `__invoke(MessageClass $message): void`.
+- **Per-store retry policy.** Captured at dispatch from the dispatching store's config and travels with the envelope so a worker serving many stores doesn't have to look up live config per message.
+- **Save-time validation.** Saving a bad backend config refuses to persist — connection is probed in the admin form's predispatch event and a clear error banner appears.
+
+## Requirements
+
+- Maho 26.5+
+- PHP 8.3+
+- ext-json, ext-redis (for the Redis backend)
+- A Redis server reachable from the workers (TCP or Unix socket)
 
 ## Install
 
-## Compatibility
+```bash
+composer require hirale/queue
+```
 
-| Module line | Platform support | Logger API |
+Run Maho's setup to create the four queue tables (`hirale_queue_job`, `hirale_queue_job_event`, `hirale_queue_job_archive`, `hirale_queue_audit`):
+
+```bash
+./maho migrate
+```
+
+## Configure
+
+Open **System → Configuration → Hirale → Queue** in admin.
+
+| Section | Scope | What it controls |
 | --- | --- | --- |
-| 2.x | Maho 25.9+ or OpenMage 20.17+ | Monolog-backed `Mage::log()` |
-| Legacy 1.x | Older Maho/OpenMage/Magento 1 installations | Zend_Log-backed `Mage::log()` |
+| Backend | Global | Backend picker (Redis / Doctrine / AMQP / SQS) plus per-backend connection fields (host, port, password, socket path, etc.). |
+| Queues | Global | Comma-separated list of logical queue names. The `default` queue is always present. |
+| Operational | Per-website | Retry policy (`retry_max_attempts`, `retry_backoff_base_seconds`, `retry_backoff_cap_seconds`), payload size cap, redacted fields, audit toggle. |
+| Retention | Per-website | Days to keep successful / failed / archived jobs; nightly archive batch size. |
 
-The current module line declares Composer conflicts for `mahocommerce/maho <25.9`
-and `openmage/magento-lts <20.17`, because this code uses Monolog log levels.
-Keep older installations pinned to the legacy 1.x module line.
+Backend connection is global (infrastructure does not vary by store). Operational and retention values can be overridden per-website using the native admin scope selector.
 
-### Install with Composer
+When you click **Save Config**, the module assembles the DSN and tries to connect to the backend. If the probe fails, the form refuses to persist and shows the error — your previous values stay intact.
 
-```bash
-composer require hirale/openmage-redis-queue
+## Producer API
+
+Downstream modules dispatch typed messages:
+
+```php
+<?php
+use Hirale\Queue\Bus;
+
+class Hirale_AsyncIndex_Helper_Data extends Mage_Core_Helper_Abstract
+{
+    public function scheduleDrain(string $reason): void
+    {
+        Bus::dispatch(new Hirale_AsyncIndex_Message_DrainEventsMessage(
+            reason: $reason,
+            entity: 'catalog_product',
+        ));
+    }
+}
 ```
 
-The package is installed in the `community` code pool so projects can override or extend behavior from the `local` code pool.
+Variants:
 
-Maho projects satisfy `magento-hackathon/magento-composer-installer` through `mahocommerce/maho`'s Composer `replace` rule and load the mapped files through the Maho Composer plugin. OpenMage projects install the Magento Composer Installer and apply the same `extra.map` into `app/code/community`.
+```php
+// Route this dispatch to a non-default queue.
+Bus::dispatchOnQueue($message, 'full_reindex');
 
-Runtime platform differences are isolated behind `hirale_queue/platform_factory`; queue handlers should depend on shared queue APIs and only use the platform adapter for behavior that differs between Maho and OpenMage.
-
-From version 1.1.0, admin configuration moved from
-`System > Configuration > System > Hirale Redis Queue Settings` to
-`System > Configuration > Hirale > Queue`. The setup migration copies saved
-values from `system/hirale_queue/*` to `hirale_queue/settings/*` without
-overwriting values already saved at the new paths.
-
-Version 2.0.0 adds the `hirale_queue_job` table. Redis remains the execution
-queue, while the database stores job status, retry scheduling, last errors, and
-admin history. Existing Redis stream messages are not deleted during upgrade;
-when a 2.x worker consumes a legacy message it creates a matching DB job record
-before running the handler.
-
-## Development
-
-Install dev dependencies and run the package test suite:
-
-```bash
-composer update
-composer test
+// Delay the first attempt by N seconds.
+Bus::dispatchDelayed($message, 60);
 ```
 
-The test suite uses PHPUnit with local Mage test doubles, so it does not need a
-running Maho/OpenMage application or Redis server.
+The current store context is captured automatically. Don't pass store_id in the message — Bus attaches a `StoreScopeStamp` for you, and the per-store retry policy is read at dispatch time.
 
-## Usage
+## Handler registration
 
-### Setup
+In your downstream module's `etc/config.xml`, under `<global>`:
 
-Go to system config `System > Configuration > Hirale > Queue`.
-
-![System > Configuration > System > Hirale Redis Queue Settings](image.png)
-
-The queue worker is disabled by default. Configure Redis, use **Test Redis
-Connection** from `System > Tools > Hirale Queue`, then enable the worker and
-make sure cron is running.
-
-### Consumer modes
-
-You can consume queued jobs in either mode:
-
-| Mode | Command | Best for |
-| --- | --- | --- |
-| Cron | Existing platform cron runs `hirale_queue/task::process` every minute | Simple installs, low volume, delay-tolerant work |
-| Long-running worker | OpenMage: `php shell/hirale_queue_worker.php`; Maho: `./maho hirale:queue:work` | Production queues, lower latency, multiple workers |
-
-Cron mode is the default compatibility path. It uses the module's existing
-`hirale_queue_process` cron job and does not require another process manager.
-
-Long-running worker mode keeps a foreground CLI process alive and repeatedly
-reads Redis Streams. Run it under systemd or Supervisor so the process is
-restarted after deploys, crashes, or its configured runtime limit.
-
-OpenMage/Magento shell worker:
-
-```bash
-php shell/hirale_queue_worker.php --consumer=hirale_queue_01 --max-runtime=3600 --max-jobs=10000
+```xml
+<hirale_queue>
+    <handlers>
+        <Hirale_AsyncIndex_Message_DrainEventsMessage>hirale_asyncindex/drainEventsHandler</Hirale_AsyncIndex_Message_DrainEventsMessage>
+        <Hirale_AsyncIndex_Message_FullReindexBatchMessage>hirale_asyncindex/fullReindexBatchHandler</Hirale_AsyncIndex_Message_FullReindexBatchMessage>
+    </handlers>
+    <routing>
+        <Hirale_AsyncIndex_Message_FullReindexBatchMessage>full_reindex</Hirale_AsyncIndex_Message_FullReindexBatchMessage>
+    </routing>
+</hirale_queue>
 ```
 
-Maho CLI worker:
+The element name is the MessageClass FQCN (use underscored class names — XML element names cannot contain backslashes, so PSR-4 namespaced messages are not supported on the routing side; declare them as legacy `Vendor_Module_*` classes).
 
-```bash
-./maho hirale:queue:work --consumer=hirale_queue_01 --max-runtime=3600 --max-jobs=10000
+Handler:
+
+```php
+<?php
+
+class Hirale_AsyncIndex_Model_DrainEventsHandler
+{
+    public function __invoke(Hirale_AsyncIndex_Message_DrainEventsMessage $message): void
+    {
+        // Do the work. Throwing reschedules per the retry policy.
+        Mage::getModel('hirale_asyncindex/runner')->drain($message->reason);
+    }
+}
 ```
 
-If the Maho command is not listed after install or update, run
-`composer dump-autoload`, then verify it with `./maho list | grep hirale`.
+Unmapped messages route to the `default` queue.
 
-Available worker options:
+## Consumer
 
-| Option | Default | Description |
-| --- | --- | --- |
-| `--consumer` | Generated from host and PID | Redis consumer name. Use a unique name per long-running worker. |
-| `--count` | System config `count` | Messages to read per batch. |
-| `--publish-limit` | System config `publish_limit` | Due DB jobs to publish before each worker read. |
-| `--max-runtime` | `3600` | Exit after this many seconds so the process manager can restart a fresh PHP process. |
-| `--max-jobs` | `10000` | Exit after this many processed jobs. |
-| `--idle-sleep` | `1` | Sleep seconds after an empty batch. |
-| `--once` | Off | Process one batch and exit. Useful for smoke tests. |
+Long-running worker:
 
-Do not run multiple long-lived workers with the same `--consumer` name. Redis
-consumer groups use the consumer name to track pending work.
+```bash
+./maho hirale:queue:consume default
+```
 
-#### systemd example
+With options:
 
-OpenMage template unit, for example `/etc/systemd/system/hirale-queue@.service`:
+```bash
+./maho hirale:queue:consume default full_reindex \
+    --time-limit=3600 \
+    --limit=10000 \
+    --sleep=1 \
+    --memory-limit=512 \
+    --consumer=hirale_worker_01
+```
+
+Run under systemd or Supervisor so the process restarts after `--time-limit` or `--limit`.
+
+### systemd example
 
 ```ini
 [Unit]
-Description=Hirale Redis Queue worker %i
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=/var/www/openmage
-User=www-data
-ExecStart=/usr/bin/php shell/hirale_queue_worker.php --consumer=hirale_queue_%i --max-runtime=3600 --max-jobs=10000
-Restart=always
-RestartSec=5
-KillSignal=SIGTERM
-TimeoutStopSec=60
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Maho template unit, for example `/etc/systemd/system/hirale-queue@.service`:
-
-```ini
-[Unit]
-Description=Hirale Redis Queue worker %i
+Description=Hirale Queue worker %i
 After=network.target
 
 [Service]
 Type=simple
 WorkingDirectory=/var/www/maho
 User=www-data
-ExecStart=/usr/bin/php ./maho hirale:queue:work --consumer=hirale_queue_%i --max-runtime=3600 --max-jobs=10000
+ExecStart=/usr/bin/php ./maho hirale:queue:consume default --consumer=hirale_worker_%i --time-limit=3600 --limit=10000
 Restart=always
 RestartSec=5
 KillSignal=SIGTERM
@@ -162,175 +173,70 @@ TimeoutStopSec=60
 WantedBy=multi-user.target
 ```
 
-Example operations:
+### Cron / Ofelia example
 
-```bash
-sudo systemctl enable --now hirale-queue@01
-sudo systemctl enable --now hirale-queue@02
+Without systemd, run the worker from cron with `flock` (or Ofelia's `no-overlap`) guaranteeing a single instance; the worker exits after `--time-limit` and is relaunched on the next tick:
+
+```cron
+* * * * * www-data flock -n /var/lock/hirale-queue.lock php /var/www/maho/maho hirale:queue:consume default --time-limit=3540 --memory-limit=256 >> /var/www/maho/var/log/hirale_queue_worker.log 2>&1
 ```
-
-#### Supervisor example
 
 ```ini
-[program:hirale-queue]
-directory=/var/www/openmage
-command=/usr/bin/php shell/hirale_queue_worker.php --consumer=%(program_name)s_%(process_num)02d --max-runtime=3600 --max-jobs=10000
-process_name=%(program_name)s_%(process_num)02d
-numprocs=2
-user=www-data
-autostart=true
-autorestart=true
-stopwaitsecs=60
+[job-exec "maho-queue-worker"]
+schedule = @every 1m
+container = php-fpm
+command = php /var/www/maho/maho hirale:queue:consume default --time-limit=3540 --memory-limit=256
+user = www-data
+tty = false
+no-overlap = true
 ```
 
-### Admin operations
+Maho's own cron (`./maho cron:run default` / `always`) must also be scheduled — it runs the nightly `hirale_queue_archive` job (archive move + retention purges, including the event and audit tables).
 
-Go to `System > Tools > Hirale Queue` to inspect queue health and job state.
-The admin UI shows status counts and a job grid with handler, queue, attempts,
-timestamps, and last error. Operators can retry a failed job, cancel a job,
-purge finished jobs according to retention settings, or test the Redis
-connection without using Redis CLI access.
+## CLI commands
 
-### Producer API
+| Command | Purpose |
+| --- | --- |
+| `hirale:queue:test [--queue=] [--timeout=]` | End-to-end self-test: dispatches a built-in ping, consumes it inline, asserts the job reached `succeeded`. Run this first on a fresh install. |
+| `hirale:queue:consume [<queue>...]` | Run a worker against the listed queues. |
+| `hirale:queue:stats [--format=text\|json]` | Per-status totals and per-queue depth. JSON output suits the Prometheus textfile collector. |
+| `hirale:queue:health [--max-age=N]` | Liveness probe: pings the backend and fails if any active job is older than `--max-age` seconds (default 300). Exit 0 healthy, 1 unhealthy. |
+| `hirale:queue:retry-failed [--queue=] [--since=] [--limit=]` | Bulk re-dispatch of `failed` jobs from the DB (`--since` accepts strtotime syntax, e.g. `"-2 hours"`). Each retry is a fresh dispatch; the old row is marked superseded so reruns never double-dispatch. |
 
-Use the queue service from dependent modules:
+## Admin operations
 
-```php
-Mage::getModel('hirale_queue/queue')->enqueue(
-    'hirale_queue_example/testHandler',
-    ['sku' => 'ABC'],
-    [
-        'queue' => 'default',
-        'max_attempts' => 3,
-        'retry_delay' => 60,
-        'delay' => 0,
-        'metadata' => ['source' => 'example'],
-    ],
-);
+**System → Tools → Hirale Queue** shows:
+
+- Status tiles per state (queued, running, retry_wait, succeeded, failed, canceled).
+- A grid of recent jobs with `job_id`, message class, queue, status, attempt counters, last error excerpt, timestamps.
+- Page-level buttons: **Test Connection** (probes the backend), **Purge Finished** (applies retention to the archive).
+- Per-row actions: **View**, **Retry** (reconstructs the message and re-dispatches as a new job; a failed source row is marked superseded), **Cancel** (cooperative for running jobs; immediate for queued / retry_wait).
+- Clicking a row opens the **job detail page**: full field list, the payload pretty-printed with configured fields redacted, metadata, and the complete state-transition timeline from `hirale_queue_job_event`.
+
+A **Test Connection** button also sits below the backend fields in *System → Configuration → Hirale → Queue* — it probes the values currently entered in the form, before saving.
+
+All admin actions are recorded in `hirale_queue_audit` when audit logging is enabled; audit rows are purged by the nightly cron after `audit_retention_days` (default 90).
+
+## Migrating from v1.x (OpenMage)
+
+The v1.x line continues on the `openmage` branch for OpenMage installs. v3 is **Maho-only** and intentionally breaks API compatibility:
+
+- v1.x producer: `Mage::getModel('hirale_queue/task')->addTask($handler, $data, ...)`
+- v3 producer: `\Hirale\Queue\Bus::dispatch(new YourMessage(...))`
+
+The handler interface, payload format, DB schema, and config paths all changed. There is no automated upgrade from v1 to v3: moving a store from OpenMage to Maho means migrating each queue consumer to typed messages and `__invoke` handlers (see *Producer API* and *Handler registration* above).
+
+## Development
+
+```bash
+composer install
+composer test       # unit tests (pure PHP, no platform bootstrap)
+composer phpstan
+composer cs-check
 ```
 
-The legacy 1.x API remains supported and delegates to the 2.x service:
-
-```php
-Mage::getModel('hirale_queue/task')->addTask(
-    'hirale_queue_example/testHandler',
-    ['sku' => 'ABC'],
-    3,
-    60,
-    60,
-);
-```
-
-Handlers still implement `Hirale_Queue_Model_TaskHandlerInterface` and expose
-`handle($data)`. Delivery is at least once, so handlers must be idempotent.
-
-### Quick start example
-
-1. Create a new module, name it `Hirale_QueueExample`.
-   `app/etc/modules/Hirale_QueueExample.xml`
-   ``` xml
-   <?xml version="1.0"?>
-   <config>
-       <modules>
-           <Hirale_QueueExample>
-               <active>true</active>
-               <codePool>local</codePool>
-               <depends>
-                   <Hirale_Queue />
-               </depends>
-           </Hirale_QueueExample>
-       </modules>
-   </config>
-   ```
-2. Create `app/code/local/Hirale/QueueExample/etc/config.xml`.
-   ```xml
-   <?xml version="1.0"?>
-    <config>
-        <modules>
-            <Hirale_QueueExample>
-                <version>1.0.0</version>
-            </Hirale_QueueExample>
-        </modules>
-        <global>
-            <models>
-                <hirale_queue_example>
-                    <class>Hirale_QueueExample_Model</class>
-                </hirale_queue_example>
-            </models>
-            <events>
-                <controller_front_send_response_before>
-                    <observers>
-                        <hirale_queue_example_send_response_after>
-                            <type>singleton</type>
-                            <class>hirale_queue_example/observer</class>
-                            <method>testExample</method>
-                        </hirale_queue_example_send_response_after>
-                    </observers>
-                </controller_front_send_response_before>
-            </events>
-        </global>
-    </config>
-    ```
-3. Create a new task handler that implements `Hirale_Queue_Model_TaskHandlerInterface`.
-   `app/code/local/Hirale/QueueExample/Model/TestHandler.php`
-   ```php
-    <?php
-        use Monolog\Level;
-
-        class Hirale_QueueExample_Model_TestHandler implements Hirale_Queue_Model_TaskHandlerInterface
-        {
-            public function handle($data)
-            {
-                Mage::log($data['id'] . ': ' . print_r($data, true), Level::Info, 'example.log');
-            }
-        }
-    ```
-
-4. Create Observer to get the data from a event and add it to queue.
-    `app/code/local/Hirale/QueueExample/Model/Observer.php`
-    ```php
-    <?php
-        class Hirale_QueueExample_Model_Observer
-        {
-            public function testExample($observer)
-            {
-                $currentRoute = $observer->getEvent()->getFront();
-                Mage::getModel('hirale_queue/task')->addTask('hirale_queue_example/testHandler',
-                ['route' => $currentRoute->getRequest()->getRequestString()]);
-            }
-        }
-    ```
-5. Enable queue processing in system config, clean cache, and check example.log. Make sure cron is running. Failed jobs can be inspected or retried from `System > Tools > Hirale Queue`.
-   ``` log
-   2024-06-09T14:39:01+00:00 INFO (6): 1717943907550-0: Array
-    (
-        [id] => 1717943907550-0
-        [handler] => hirale_queue_example/testHandler
-        [data] => Array
-            (
-                [route] => /admin/customer/index/key/5232c0583f633e8d8d8c349ebb4639db/
-            )
-
-        [retry_count] => 3
-        [retry_delay] => 60
-        [timeout] => 60
-    )
-
-    2024-06-09T15:04:02+00:00 INFO (6): 1717945421857-0: Array
-    (
-        [id] => 1717945421857-0
-        [handler] => hirale_queue_example/testHandler
-        [data] => Array
-            (
-                [route] => /admin/customer/index/key/5232c0583f633e8d8d8c349ebb4639db/
-            )
-
-        [retry_count] => 3
-        [retry_delay] => 60
-        [timeout] => 60
-    )
-    ```
+The unit suite covers DSN assembly per backend, message routing (SendersLocator), retry strategy semantics (including the unrecoverable/recoverable exception markers), message reconstruction, and stamp construction. For a live end-to-end check against a real install, use `./maho hirale:queue:test`.
 
 ## License
 
-The Open Software License v. 3.0 (OSL-3.0). Please see [License File](LICENSE.md) for more information.
+Open Software License v. 3.0 (OSL-3.0). See [LICENSE.md](LICENSE.md).

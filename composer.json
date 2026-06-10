@@ -1,66 +1,67 @@
 {
-    "name": "hirale/openmage-redis-queue",
-    "description": "A Redis Streams queue module for OpenMage and Maho",
-    "type": "magento-module",
+    "name": "hirale/queue",
+    "type": "maho-module",
     "license": "OSL-3.0",
+    "description": "A queue module for Maho, built on Symfony Messenger. Backend-agnostic (Redis, Doctrine, AMQP, SQS).",
     "keywords": [
-        "magento",
-        "magento1",
         "maho",
         "mahoecommerce",
-        "openmage",
         "queue",
-        "redis"
+        "messenger",
+        "redis",
+        "amqp",
+        "doctrine",
+        "sqs"
     ],
     "require": {
-        "magento-hackathon/magento-composer-installer": "^3.0 || ^4.0 || ^99.99",
-        "php": ">=8.1 <8.6",
-        "monolog/monolog": "^3.9",
-        "predis/predis": "^3.4"
+        "php": ">=8.3",
+        "ext-json": "*",
+        "ext-redis": "*",
+        "mahocommerce/maho": "^26.5",
+        "symfony/messenger": "^7.4",
+        "symfony/serializer": "^7.4",
+        "symfony/redis-messenger": "^7.4",
+        "monolog/monolog": "^3.9"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "phpstan/phpstan": "^2.0",
+        "friendsofphp/php-cs-fixer": "^3.50"
+    },
+    "suggest": {
+        "symfony/doctrine-messenger": "^7.4 — required for the Doctrine (database) backend",
+        "symfony/amqp-messenger": "^7.4 — required for the AMQP/RabbitMQ backend",
+        "symfony/amazon-sqs-messenger": "^7.4 — required for the Amazon SQS backend",
+        "symfony/beanstalkd-messenger": "^7.4 — required for the Beanstalkd backend"
     },
     "config": {
         "allow-plugins": {
-            "magento-hackathon/magento-composer-installer": false
+            "mahocommerce/maho-composer-plugin": true
         }
     },
-    "conflict": {
-        "mahocommerce/maho": "<25.9",
-        "openmage/magento-lts": "<20.17"
-    },
-    "authors": [
-        {
-            "name": "Hirale"
+    "autoload": {
+        "psr-4": {
+            "Hirale\\Queue\\": "lib/Hirale/Queue/",
+            "MahoCLI\\Commands\\": "lib/MahoCLI/Commands/"
         }
-    ],
-    "extra": {
-        "map": [
-            [
-                "src/app/etc/modules/Hirale_Queue.xml",
-                "app/etc/modules/Hirale_Queue.xml"
-            ],
-            [
-                "src/app/code/community/Hirale/Queue",
-                "app/code/community/Hirale/Queue"
-            ],
-            [
-                "src/shell/hirale_queue_worker.php",
-                "shell/hirale_queue_worker.php"
-            ],
-            [
-                "src/lib/MahoCLI/Commands/HiraleQueueWork.php",
-                "lib/MahoCLI/Commands/HiraleQueueWork.php"
-            ]
-        ]
     },
     "autoload-dev": {
         "psr-4": {
             "HiraleQueue\\Tests\\": "tests/"
         }
     },
+    "extra": {
+        "maho-module-dir": "app/code/community/Hirale/Queue"
+    },
     "scripts": {
-        "test": "phpunit"
-    }
+        "test": "phpunit",
+        "phpstan": "phpstan analyse --memory-limit=512M",
+        "cs-check": "php-cs-fixer fix --dry-run --diff",
+        "cs-fix": "php-cs-fixer fix"
+    },
+    "authors": [
+        {
+            "name": "Hirale"
+        }
+    ]
 }

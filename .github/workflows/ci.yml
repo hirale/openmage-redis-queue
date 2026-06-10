@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  checks:
+    name: checks (php ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          # redis is a hard require of this package; the rest satisfy the
+          # mahocommerce/maho platform requirements pulled in via composer.
+          extensions: bcmath, ctype, curl, dom, gd, iconv, intl, json, mbstring, pcntl, pdo_mysql, redis, simplexml, soap, xml, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Composer cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.composer/cache
+            vendor
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ matrix.php }}-
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Static analysis (PHPStan)
+        run: composer phpstan
+
+      - name: Code style (php-cs-fixer)
+        env:
+          PHP_CS_FIXER_IGNORE_ENV: '1'
+        run: composer cs-check
+
+      - name: Unit tests
+        run: composer test
+
+  # The v2 Redis integration suite was removed in the v3 rewrite; an
+  # end-to-end suite (Redis service + `hirale:queue:test` against a Maho
+  # install) is on the v3.x roadmap.

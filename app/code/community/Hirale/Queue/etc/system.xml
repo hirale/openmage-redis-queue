@@ -1,0 +1,349 @@
+<?xml version="1.0"?>
+<config>
+    <tabs>
+        <hirale translate="label" module="hirale_queue">
+            <label>Hirale</label>
+            <sort_order>200</sort_order>
+        </hirale>
+    </tabs>
+    <sections>
+        <hirale_queue translate="label" module="hirale_queue">
+            <label>Queue</label>
+            <tab>hirale</tab>
+            <sort_order>10</sort_order>
+            <show_in_default>1</show_in_default>
+            <show_in_website>1</show_in_website>
+            <show_in_store>0</show_in_store>
+            <groups>
+
+                <!-- ==================== Backend ==================== -->
+                <backend translate="label comment" module="hirale_queue">
+                    <label>Backend</label>
+                    <sort_order>10</sort_order>
+                    <show_in_default>1</show_in_default>
+                    <show_in_website>0</show_in_website>
+                    <show_in_store>0</show_in_store>
+                    <comment>Infrastructure connection. Global only — does not vary by store.</comment>
+                    <fields>
+
+                        <type translate="label comment">
+                            <label>Backend</label>
+                            <frontend_type>select</frontend_type>
+                            <source_model>hirale_queue/source_backend</source_model>
+                            <sort_order>10</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <comment>Select the Symfony Messenger transport. Doctrine/AMQP/SQS require their respective composer package.</comment>
+                        </type>
+
+                        <!-- Redis fields -->
+                        <redis_host translate="label comment">
+                            <label>Redis Host or Socket Path</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>20</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <comment>Hostname (e.g. 127.0.0.1) or absolute Unix socket path (e.g. /var/run/redis/redis.sock).</comment>
+                            <depends><type>redis</type></depends>
+                        </redis_host>
+                        <redis_port translate="label">
+                            <label>Redis Port</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>30</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <depends><type>redis</type></depends>
+                        </redis_port>
+                        <redis_password translate="label">
+                            <label>Redis Password</label>
+                            <frontend_type>obscure</frontend_type>
+                            <backend_model>adminhtml/system_config_backend_encrypted</backend_model>
+                            <sort_order>40</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <depends><type>redis</type></depends>
+                        </redis_password>
+                        <redis_database translate="label">
+                            <label>Redis Database</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>50</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <depends><type>redis</type></depends>
+                        </redis_database>
+                        <redis_use_tls translate="label comment">
+                            <label>Use TLS</label>
+                            <frontend_type>select</frontend_type>
+                            <source_model>adminhtml/system_config_source_yesno</source_model>
+                            <sort_order>55</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <comment>Encrypt the Redis connection (rediss). Requires a TLS-enabled Redis server.</comment>
+                            <depends><type>redis</type></depends>
+                        </redis_use_tls>
+                        <redis_tls_verify_peer translate="label comment">
+                            <label>TLS Verify Peer</label>
+                            <frontend_type>select</frontend_type>
+                            <source_model>adminhtml/system_config_source_yesno</source_model>
+                            <sort_order>60</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <comment>Disable only for self-signed certificates in dev.</comment>
+                            <depends><type>redis</type><redis_use_tls>1</redis_use_tls></depends>
+                        </redis_tls_verify_peer>
+                        <redis_tls_cafile translate="label comment">
+                            <label>TLS CA File</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>70</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <comment>Absolute path to a custom CA bundle. Leave empty to use the system default.</comment>
+                            <depends><type>redis</type><redis_use_tls>1</redis_use_tls></depends>
+                        </redis_tls_cafile>
+
+                        <!-- Doctrine fields -->
+                        <doctrine_connection translate="label comment">
+                            <label>Doctrine Connection Name</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>20</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <comment>Magento DB connection name. Default: core_write.</comment>
+                            <depends><type>doctrine</type></depends>
+                        </doctrine_connection>
+                        <doctrine_table_name translate="label">
+                            <label>Doctrine Table Name</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>30</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <depends><type>doctrine</type></depends>
+                        </doctrine_table_name>
+                        <doctrine_auto_setup translate="label comment">
+                            <label>Doctrine Auto-Setup</label>
+                            <frontend_type>select</frontend_type>
+                            <source_model>adminhtml/system_config_source_yesno</source_model>
+                            <sort_order>40</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <comment>Create the messenger table automatically when missing.</comment>
+                            <depends><type>doctrine</type></depends>
+                        </doctrine_auto_setup>
+
+                        <!-- AMQP fields -->
+                        <amqp_host translate="label">
+                            <label>AMQP Host</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>20</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <depends><type>amqp</type></depends>
+                        </amqp_host>
+                        <amqp_port translate="label">
+                            <label>AMQP Port</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>30</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <depends><type>amqp</type></depends>
+                        </amqp_port>
+                        <amqp_user translate="label">
+                            <label>AMQP User</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>40</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <depends><type>amqp</type></depends>
+                        </amqp_user>
+                        <amqp_password translate="label">
+                            <label>AMQP Password</label>
+                            <frontend_type>obscure</frontend_type>
+                            <backend_model>adminhtml/system_config_backend_encrypted</backend_model>
+                            <sort_order>50</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <depends><type>amqp</type></depends>
+                        </amqp_password>
+                        <amqp_vhost translate="label">
+                            <label>AMQP Vhost</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>60</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <depends><type>amqp</type></depends>
+                        </amqp_vhost>
+                        <amqp_exchange translate="label comment">
+                            <label>AMQP Exchange Name</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>70</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <comment>Exchange routing key prefix; per-queue suffix appended.</comment>
+                            <depends><type>amqp</type></depends>
+                        </amqp_exchange>
+
+                        <!-- SQS fields -->
+                        <sqs_region translate="label">
+                            <label>SQS Region</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>20</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <depends><type>sqs</type></depends>
+                        </sqs_region>
+                        <sqs_queue_url translate="label comment">
+                            <label>SQS Queue URL (prefix)</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>30</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <comment>Per-queue suffix applied to derive individual queue URLs.</comment>
+                            <depends><type>sqs</type></depends>
+                        </sqs_queue_url>
+                        <sqs_use_instance_profile translate="label comment">
+                            <label>Use Instance Profile Credentials</label>
+                            <frontend_type>select</frontend_type>
+                            <source_model>adminhtml/system_config_source_yesno</source_model>
+                            <sort_order>40</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <comment>If yes, AWS SDK reads credentials from EC2/ECS metadata; the access key/secret fields below are ignored.</comment>
+                            <depends><type>sqs</type></depends>
+                        </sqs_use_instance_profile>
+                        <sqs_access_key translate="label">
+                            <label>SQS Access Key</label>
+                            <frontend_type>obscure</frontend_type>
+                            <backend_model>adminhtml/system_config_backend_encrypted</backend_model>
+                            <sort_order>50</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <depends><type>sqs</type></depends>
+                        </sqs_access_key>
+                        <sqs_secret_key translate="label">
+                            <label>SQS Secret Key</label>
+                            <frontend_type>obscure</frontend_type>
+                            <backend_model>adminhtml/system_config_backend_encrypted</backend_model>
+                            <sort_order>60</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <depends><type>sqs</type></depends>
+                        </sqs_secret_key>
+
+                        <test_connection translate="label comment">
+                            <label>Test Connection</label>
+                            <frontend_model>hirale_queue/adminhtml_system_config_testConnection</frontend_model>
+                            <sort_order>900</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <comment>Tests the values entered above without saving them.</comment>
+                        </test_connection>
+
+                    </fields>
+                </backend>
+
+                <!-- ==================== Queues ==================== -->
+                <queues translate="label comment" module="hirale_queue">
+                    <label>Queues</label>
+                    <sort_order>20</sort_order>
+                    <show_in_default>1</show_in_default>
+                    <show_in_website>0</show_in_website>
+                    <show_in_store>0</show_in_store>
+                    <comment>One queue per row. Routing config in each downstream module's config.xml maps MessageClass FQCN to a queue name. Unmapped messages route to "default".</comment>
+                    <fields>
+                        <list translate="label comment">
+                            <label>Queue List (comma-separated)</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>10</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <comment>Comma-separated queue names, e.g. "default,high,full_reindex". Names must be unique. The "default" queue is required.</comment>
+                        </list>
+                    </fields>
+                </queues>
+
+                <!-- ==================== Operational ==================== -->
+                <operational translate="label comment" module="hirale_queue">
+                    <label>Operational</label>
+                    <sort_order>30</sort_order>
+                    <show_in_default>1</show_in_default>
+                    <show_in_website>1</show_in_website>
+                    <show_in_store>0</show_in_store>
+                    <comment>Per-website overrides allowed. Captured into the message envelope at dispatch time; consumer uses envelope values, not live config.</comment>
+                    <fields>
+                        <retry_max_attempts translate="label">
+                            <label>Retry Max Attempts</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>10</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                        </retry_max_attempts>
+                        <retry_backoff_base_seconds translate="label comment">
+                            <label>Retry Backoff Base (seconds)</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>20</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <comment>Full-jitter exponential: random(0, base * 2^attempt).</comment>
+                        </retry_backoff_base_seconds>
+                        <retry_backoff_cap_seconds translate="label">
+                            <label>Retry Backoff Cap (seconds)</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>30</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                        </retry_backoff_cap_seconds>
+                        <payload_max_bytes translate="label">
+                            <label>Payload Max Bytes</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>40</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                        </payload_max_bytes>
+                        <redacted_fields translate="label comment">
+                            <label>Redacted Payload Fields</label>
+                            <frontend_type>textarea</frontend_type>
+                            <sort_order>50</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <comment>Comma-separated field names hidden in admin payload view (case-insensitive). Stored values are unchanged.</comment>
+                        </redacted_fields>
+                        <audit_admin_actions translate="label comment">
+                            <label>Audit Admin Actions</label>
+                            <frontend_type>select</frontend_type>
+                            <source_model>adminhtml/system_config_source_yesno</source_model>
+                            <sort_order>60</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <comment>Record retry/cancel/purge/test-connection clicks in hirale_queue_audit.</comment>
+                        </audit_admin_actions>
+                    </fields>
+                </operational>
+
+                <!-- ==================== Retention ==================== -->
+                <retention translate="label" module="hirale_queue">
+                    <label>Retention</label>
+                    <sort_order>40</sort_order>
+                    <show_in_default>1</show_in_default>
+                    <show_in_website>1</show_in_website>
+                    <show_in_store>0</show_in_store>
+                    <fields>
+                        <success_retention_days translate="label">
+                            <label>Successful Job Retention (days)</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>10</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                        </success_retention_days>
+                        <failure_retention_days translate="label">
+                            <label>Failed Job Retention (days)</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>20</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                        </failure_retention_days>
+                        <archive_retention_days translate="label comment">
+                            <label>Archive Move Threshold (days)</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>30</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <comment>Move finished jobs to hirale_queue_job_archive when older than this.</comment>
+                        </archive_retention_days>
+                        <archive_batch_size translate="label">
+                            <label>Archive Batch Size</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>40</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                        </archive_batch_size>
+                        <audit_retention_days translate="label comment">
+                            <label>Admin Audit Retention (days)</label>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>50</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <comment>hirale_queue_audit rows older than this are deleted by the nightly cron.</comment>
+                        </audit_retention_days>
+                    </fields>
+                </retention>
+
+            </groups>
+        </hirale_queue>
+    </sections>
+</config>

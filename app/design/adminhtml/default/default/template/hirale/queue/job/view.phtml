@@ -1,0 +1,123 @@
+<?php
+/** @var Hirale_Queue_Block_Adminhtml_Job_View $this */
+$job    = $this->getJob();
+$helper = Mage::helper('hirale_queue');
+$events = $this->getEvents();
+$metadataJson = $this->getMetadataJson();
+?>
+<div class="content-header">
+    <h3 class="icon-head head-adminhtml-queue"><?= $this->escapeHtml($this->getHeaderText()) ?></h3>
+    <p class="content-buttons form-buttons"><?= $this->getButtonsHtml() ?></p>
+</div>
+
+<div class="entry-edit">
+    <div class="entry-edit-head"><h4><?= $this->escapeHtml($helper->__('Job')) ?></h4></div>
+    <div class="fieldset">
+        <table class="form-list" cellspacing="0">
+            <tbody>
+                <tr>
+                    <td class="label"><?= $this->escapeHtml($helper->__('Job ID')) ?></td>
+                    <td class="value"><code><?= $this->escapeHtml((string) ($job['job_id'] ?? '')) ?></code></td>
+                </tr>
+                <tr>
+                    <td class="label"><?= $this->escapeHtml($helper->__('Message Class')) ?></td>
+                    <td class="value"><code><?= $this->escapeHtml((string) ($job['message_class'] ?? '')) ?></code></td>
+                </tr>
+                <tr>
+                    <td class="label"><?= $this->escapeHtml($helper->__('Queue')) ?></td>
+                    <td class="value"><?= $this->escapeHtml((string) ($job['queue_name'] ?? '')) ?></td>
+                </tr>
+                <tr>
+                    <td class="label"><?= $this->escapeHtml($helper->__('Status')) ?></td>
+                    <td class="value"><strong><?= $this->escapeHtml($this->getStatusLabel()) ?></strong>
+                        <?php if ((int) ($job['cancel_requested'] ?? 0) === 1): ?>
+                            (<?= $this->escapeHtml($helper->__('cancellation requested')) ?>)
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="label"><?= $this->escapeHtml($helper->__('Attempt')) ?></td>
+                    <td class="value"><?= (int) ($job['attempt'] ?? 0) ?> / <?= (int) ($job['max_attempts'] ?? 0) ?></td>
+                </tr>
+                <tr>
+                    <td class="label"><?= $this->escapeHtml($helper->__('Store ID')) ?></td>
+                    <td class="value"><?= $job['store_id'] === null ? '—' : (int) $job['store_id'] ?></td>
+                </tr>
+                <tr>
+                    <td class="label"><?= $this->escapeHtml($helper->__('Transport ID')) ?></td>
+                    <td class="value"><?= $job['transport_id'] ? '<code>' . $this->escapeHtml((string) $job['transport_id']) . '</code>' : '—' ?></td>
+                </tr>
+                <tr>
+                    <td class="label"><?= $this->escapeHtml($helper->__('Created / Dispatched')) ?></td>
+                    <td class="value"><?= $this->escapeHtml((string) ($job['created_at'] ?? '—')) ?> / <?= $this->escapeHtml((string) ($job['dispatched_at'] ?? '—')) ?></td>
+                </tr>
+                <tr>
+                    <td class="label"><?= $this->escapeHtml($helper->__('Available / Started / Finished')) ?></td>
+                    <td class="value"><?= $this->escapeHtml((string) ($job['available_at'] ?? '—')) ?> / <?= $this->escapeHtml((string) ($job['started_at'] ?? '—')) ?> / <?= $this->escapeHtml((string) ($job['finished_at'] ?? '—')) ?></td>
+                </tr>
+                <?php if (!empty($job['last_error'])): ?>
+                <tr>
+                    <td class="label"><?= $this->escapeHtml($helper->__('Last Error')) ?></td>
+                    <td class="value"><pre style="white-space:pre-wrap;max-height:200px;overflow:auto;margin:0;"><?= $this->escapeHtml((string) $job['last_error']) ?></pre></td>
+                </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="entry-edit">
+    <div class="entry-edit-head"><h4><?= $this->escapeHtml($helper->__('Event Timeline')) ?></h4></div>
+    <div class="fieldset" style="font-family:Arial,sans-serif;">
+        <?php if ($events === []): ?>
+            <p><?= $this->escapeHtml($helper->__('No events recorded.')) ?></p>
+        <?php else: ?>
+
+        <?php // One node per transition, joined by arrows; wraps on long chains.
+              // Hover a node for the full timestamp / error excerpt. ?>
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;row-gap:12px;">
+            <?php $lastIndex = count($events) - 1; ?>
+            <?php foreach ($events as $i => $event): ?>
+                <?php
+                $status  = (string) $event['to_status'];
+                $color   = $this->statusColor($status);
+                $isLast  = $i === $lastIndex;
+                $error   = (string) ($event['error_excerpt'] ?? '');
+                $tooltip = $event['occurred_at'] . ' UTC' . ($error !== '' ? "\n" . $error : '');
+                ?>
+                <?php if ($i > 0): ?><span style="color:#bbb;font-size:15px;">&rarr;</span><?php endif; ?>
+                <div title="<?= $this->escapeHtml($tooltip) ?>"
+                     style="min-width:108px;padding:7px 12px;background:#fff;border:1px solid #ddd;border-top:3px solid <?= $this->escapeHtml($color) ?>;border-radius:6px;<?= $isLast ? 'box-shadow:0 1px 4px ' . $this->escapeHtml($color) . '55;' : '' ?>">
+                    <div style="font-size:12px;font-weight:bold;color:<?= $this->escapeHtml($color) ?>;white-space:nowrap;">
+                        <?= $this->escapeHtml($this->statusLabel($status)) ?>
+                        <?php if ((int) $event['attempt'] > 0): ?>
+                            <span style="font-weight:normal;color:#999;">#<?= (int) $event['attempt'] ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <div style="font-size:11px;color:#999;white-space:nowrap;"><?= $this->escapeHtml(substr((string) $event['occurred_at'], 11)) ?></div>
+                    <?php if ($error !== ''): ?>
+                        <div style="font-size:10px;color:#a33;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">&#9888; <?= $this->escapeHtml($error) ?></div>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <?php endif; ?>
+    </div>
+</div>
+
+<?php if ($metadataJson !== null): ?>
+<div class="entry-edit">
+    <div class="entry-edit-head"><h4><?= $this->escapeHtml($helper->__('Metadata (redacted)')) ?></h4></div>
+    <div class="fieldset">
+        <pre style="white-space:pre-wrap;max-height:200px;overflow:auto;margin:0;"><?= $this->escapeHtml($metadataJson) ?></pre>
+    </div>
+</div>
+<?php endif; ?>
+
+<div class="entry-edit">
+    <div class="entry-edit-head"><h4><?= $this->escapeHtml($helper->__('Payload (redacted)')) ?></h4></div>
+    <div class="fieldset">
+        <pre style="white-space:pre-wrap;max-height:420px;overflow:auto;margin:0;"><?= $this->escapeHtml($this->getPayloadJson()) ?></pre>
+    </div>
+</div>
