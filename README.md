@@ -45,6 +45,28 @@ will notice is the worker entry point (Maho CLI vs `shell/` scripts).
 composer require hirale/queue
 ```
 
+### OpenMage: one-time composer adjustments
+
+Stock OpenMage pins `magento-hackathon/magento-composer-installer` to
+`^3.1 || ^2.1 || ^4.0`. Those versions require `symfony/console ≤5`,
+which cannot coexist with Symfony Messenger 7.x. Version 1.3.2 has no
+console requirement and deploys `extra.map` modules fine under
+Composer 2 (it prints a "legacy composer-installer" warning, which is
+harmless). OpenMage also locks dependency resolution to PHP 8.1 via
+`config.platform`, which would reject this package's PHP 8.3 floor.
+
+In your project root, before requiring the package:
+
+```bash
+composer remove --no-update magento-hackathon/magento-composer-installer
+composer config platform.php 8.3
+composer require hirale/queue
+```
+
+The installer comes back transitively at 1.3.2 (other OpenMage
+packages require it as `*`) and copies the module into `app/`,
+including the five `shell/hirale_queue_*.php` entry points.
+
 Create the four queue tables (`hirale_queue_job`, `hirale_queue_job_event`, `hirale_queue_job_archive`, `hirale_queue_audit`):
 
 - **Maho**: `./maho migrate`
@@ -235,7 +257,8 @@ v3 intentionally breaks API compatibility with the v1 line
 The handler interface, payload format, DB schema, and config paths all
 changed. Upgrading an existing OpenMage install:
 
-1. `composer remove hirale/openmage-redis-queue && composer require hirale/queue`
+1. Apply the one-time composer adjustments from *Install → OpenMage*, then
+   `composer remove hirale/openmage-redis-queue && composer require hirale/queue`
 2. Setup scripts create the v3 tables automatically (v1 tables are left
    untouched; drop them once you no longer need the history).
 3. Reconfigure the backend once under **System → Configuration → Hirale →

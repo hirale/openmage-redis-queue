@@ -76,9 +76,11 @@ if (!$connection->isTableExists($tableJob)) {
             'nullable' => false,
             'default'  => 0,
         ], 'Cooperative cancel flag — handler checks at safe boundary')
+        // No TIMESTAMP_INIT defaults on datetime columns: OpenMage's DDL maps
+        // that token only for TYPE_TIMESTAMP and would emit it as a literal
+        // string. Every write path sets these columns explicitly via gmdate().
         ->addColumn('available_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => false,
-            'default'  => Varien_Db_Ddl_Table::TIMESTAMP_INIT,
         ], 'Next execution time (for delayed / retry_wait jobs)')
         ->addColumn('dispatched_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => true,
@@ -91,11 +93,9 @@ if (!$connection->isTableExists($tableJob)) {
         ], 'When the job reached a terminal state')
         ->addColumn('created_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => false,
-            'default'  => Varien_Db_Ddl_Table::TIMESTAMP_INIT,
         ], 'Row creation time')
         ->addColumn('updated_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => false,
-            'default'  => Varien_Db_Ddl_Table::TIMESTAMP_INIT_UPDATE,
         ], 'Last update time')
         ->addIndex(
             $installer->getIdxName('hirale_queue/job', ['job_id'], Varien_Db_Adapter_Interface::INDEX_TYPE_UNIQUE),
@@ -148,7 +148,6 @@ if (!$connection->isTableExists($tableJobEvent)) {
         ], 'Failure reason excerpt (1024 char limit)')
         ->addColumn('occurred_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => false,
-            'default'  => Varien_Db_Ddl_Table::TIMESTAMP_INIT,
         ], 'Transition timestamp')
         ->addIndex(
             $installer->getIdxName('hirale_queue/job_event', ['job_id', 'occurred_at']),
@@ -213,7 +212,6 @@ if (!$connection->isTableExists($tableJobArchive)) {
         ], 'Job completion time')
         ->addColumn('archived_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => false,
-            'default'  => Varien_Db_Ddl_Table::TIMESTAMP_INIT,
         ], 'Archive move time')
         ->addIndex(
             $installer->getIdxName('hirale_queue/job_archive', ['job_id'], Varien_Db_Adapter_Interface::INDEX_TYPE_UNIQUE),
@@ -258,7 +256,6 @@ if (!$connection->isTableExists($tableAudit)) {
         ], 'Client IP address')
         ->addColumn('created_at', Varien_Db_Ddl_Table::TYPE_DATETIME, null, [
             'nullable' => false,
-            'default'  => Varien_Db_Ddl_Table::TIMESTAMP_INIT,
         ], 'Action timestamp')
         ->addIndex(
             $installer->getIdxName('hirale_queue/audit', ['action', 'created_at']),
